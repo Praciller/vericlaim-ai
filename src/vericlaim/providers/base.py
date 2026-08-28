@@ -132,6 +132,7 @@ class ProviderRequest:
     task: str
     prompt: str
     max_tokens: int = 512
+    timeout_seconds: float | None = None
 
 
 @dataclass
@@ -244,7 +245,11 @@ class OpenAICompatibleProvider:
                     "temperature": 0,
                     "max_tokens": max_tokens or request.max_tokens,
                 },
-                timeout=self.timeout_seconds,
+                timeout=(
+                    min(self.timeout_seconds, request.timeout_seconds)
+                    if request.timeout_seconds is not None
+                    else self.timeout_seconds
+                ),
             )
         except httpx.TimeoutException as exc:
             raise ProviderException(
@@ -351,7 +356,11 @@ class GeminiProvider:
                         "maxOutputTokens": request.max_tokens,
                     },
                 },
-                timeout=self.timeout_seconds,
+                timeout=(
+                    min(self.timeout_seconds, request.timeout_seconds)
+                    if request.timeout_seconds is not None
+                    else self.timeout_seconds
+                ),
             )
         except httpx.TimeoutException as exc:
             raise ProviderException(

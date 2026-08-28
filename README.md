@@ -118,7 +118,7 @@ The verification endpoint completes synchronously for the MVP. Offline mode uses
 
 The result `issue_code` is an operational signal separate from the verdict. It can report `PROVIDER_UNAVAILABLE`, `QUOTA_EXHAUSTED`, `PROVIDER_RATE_LIMIT`, `PROVIDER_TIMEOUT`, `PROVIDER_AUTHENTICATION`, `PROVIDER_RESPONSE_INVALID`, `RETRIEVAL_UNAVAILABLE`, or `REQUEST_LIMIT_EXCEEDED`. A degraded result remains inspectable, but the UI explicitly tells the user to inspect the run trace before relying on provider-assisted output. `INSUFFICIENT_EVIDENCE` remains a verdict label, not a provider failure.
 
-The API enforces conservative per-request bounds: a 2,000-character claim, at most 8 atomic claims, 16 retrieval queries, 32 evidence candidates, and 8 provider-call attempts. Provider and retrieval adapters also use explicit timeouts, retries are bounded to one same-provider retry, excerpts are capped, and the MVP does not fetch user-supplied URLs.
+The API enforces conservative per-request bounds: a 2,000-character claim, at most 8 atomic claims, 16 retrieval queries, 32 evidence candidates, and 8 provider-call attempts. Verification has a 30-second cooperative request deadline and returns a sanitized `504 REQUEST_TIMEOUT` when exceeded. Provider and retrieval adapters also use explicit timeouts, retries are bounded to one same-provider retry, excerpts are capped, and the MVP does not fetch user-supplied URLs.
 
 The evidence graph is a read-only projection of the stored run: claim → atomic claim → evidence → source. It performs no new retrieval or provider call, exposes source provenance and evidence level, and keeps evidence excerpts inspectable in the UI. This makes the local fixture demo useful even when external providers are unavailable.
 

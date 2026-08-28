@@ -47,12 +47,18 @@ class RouterResult:
 class ProviderCallBudget:
     limit: int
     attempted: int = 0
+    deadline: float | None = None
 
     def reserve(self) -> bool:
         if self.attempted >= self.limit:
             return False
         self.attempted += 1
         return True
+
+    def remaining_seconds(self) -> float | None:
+        if self.deadline is None:
+            return None
+        return max(0.0, self.deadline - time.monotonic())
 
 
 class ProviderRouter:
@@ -165,6 +171,14 @@ class ProviderRouter:
             attempt = 0
             while True:
                 try:
+                    remaining_seconds = budget.remaining_seconds() if budget else None
+                    if remaining_seconds is not None and remaining_seconds <= 0:
+                        raise ProviderException(
+                            "verification request timed out",
+                            category=ProviderErrorCategory.TIMEOUT,
+                            retryable=False,
+                            fallback_allowed=False,
+                        )
                     if budget is not None and not budget.reserve():
                         raise ProviderException(
                             "per-request provider call limit reached",
@@ -172,7 +186,13 @@ class ProviderRouter:
                             retryable=False,
                             fallback_allowed=False,
                         )
-                    response = provider.generate(ProviderRequest(task=task, prompt=prompt))
+                    response = provider.generate(
+                        ProviderRequest(
+                            task=task,
+                            prompt=prompt,
+                            timeout_seconds=remaining_seconds,
+                        )
+                    )
                     self._last_status[name] = response.status
                     self._quota[name] = (
                         response.quota_remaining_tokens,

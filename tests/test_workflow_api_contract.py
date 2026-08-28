@@ -1,10 +1,17 @@
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
 import vericlaim.api as api_module
 from vericlaim.api import app
 from vericlaim.config import Settings
-from vericlaim.domain.models import ProviderErrorCategory, RunIssueCode, RunStatus
+from vericlaim.domain.models import (
+    ProviderErrorCategory,
+    RunIssueCode,
+    RunStatus,
+    VerificationRequest,
+)
 from vericlaim.providers.base import (
     MockProvider,
     ProviderException,
@@ -79,6 +86,27 @@ def test_verification_api_rejects_oversized_claim():
         response = client.post("/api/v1/claims/verify", json={"claim": "x" * 2001})
 
     assert response.status_code == 422
+
+
+def test_verification_api_returns_sanitized_timeout(monkeypatch):
+    class SlowWorkflow:
+        def verify(self, request: VerificationRequest, *, timeout_seconds: float) -> object:
+            time.sleep(0.6)
+            return object()
+
+    monkeypatch.setattr(api_module, "workflow", SlowWorkflow())
+    monkeypatch.setattr(api_module.settings, "request_timeout_seconds", 0.05)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/claims/verify", json={"claim": "RAG eliminates hallucinations"}
+        )
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == {
+        "code": "REQUEST_TIMEOUT",
+        "message": "verification timed out safely",
+    }
 
 
 def test_verification_api_rejects_excessive_atomic_claims():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, cast
@@ -43,6 +44,10 @@ from .retrieval.fixture import FixtureSource
 from .validation import validate_result
 
 MIXED_VERDICT_HEURISTIC_CONFIDENCE = 0.65
+
+
+class RequestTimeoutError(TimeoutError):
+    """Raised when a verification exceeds its cooperative request deadline."""
 
 
 @dataclass
@@ -104,19 +109,32 @@ class VerificationWorkflow:
         graph.add_edge("validate", END)
         return graph.compile()
 
-    def verify(self, request: VerificationRequest | dict[str, str]) -> VerificationResult:
+    def verify(
+        self,
+        request: VerificationRequest | dict[str, str],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> VerificationResult:
         validated_request = VerificationRequest.model_validate(request)
+        deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
         state_value = self.graph.invoke(
             WorkflowState(
                 request=validated_request,
                 provider_budget=ProviderCallBudget(
-                    limit=self.settings.max_provider_calls_per_request
+                    limit=self.settings.max_provider_calls_per_request,
+                    deadline=deadline,
                 ),
             )
         )
         state = WorkflowState(**state_value) if isinstance(state_value, dict) else state_value
+        self._ensure_request_budget(state)
         result = self._to_result(state)
         return validate_result(result)
+
+    @staticmethod
+    def _ensure_request_budget(state: WorkflowState) -> None:
+        if state.provider_budget and state.provider_budget.remaining_seconds() == 0:
+            raise RequestTimeoutError("verification request timed out")
 
     def _record_agent(
         self,
@@ -128,6 +146,7 @@ class VerificationWorkflow:
         use_provider: bool = False,
         prompt: str | None = None,
     ) -> ProviderResponse | None:
+        self._ensure_request_budget(state)
         started = utc_now()
         if not use_provider:
             state.agent_runs.append(
@@ -172,6 +191,7 @@ class VerificationWorkflow:
             state.limitations.append(
                 f"{task} used a deterministic fallback after {state.issue_code.value}"
             )
+        self._ensure_request_budget(state)
         state.agent_runs.append(
             AgentRun(
                 agent_name=name,
@@ -358,9 +378,11 @@ class VerificationWorkflow:
         candidates_seen = 0
         candidate_limit_hit = False
         for query in state.queries:
+            self._ensure_request_budget(state)
             if candidate_limit_hit:
                 break
             for retriever in self.retrievers:
+                self._ensure_request_budget(state)
                 try:
                     records = retriever.search(query.query, limit=2)
                 except RetrievalError:
@@ -370,6 +392,7 @@ class VerificationWorkflow:
                     if limitation not in state.limitations:
                         state.limitations.append(limitation)
                     continue
+                self._ensure_request_budget(state)
                 for record in records:
                     if candidates_seen >= self.settings.max_evidence_candidates_per_request:
                         candidate_limit_hit = True

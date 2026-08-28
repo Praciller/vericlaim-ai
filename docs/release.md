@@ -43,8 +43,10 @@ and evidence-graph endpoints.
 
 The API also applies hard per-request bounds: 2,000 claim characters, 8 atomic
 claims, 16 retrieval queries, 32 evidence candidates, and 8 provider-call
-attempts. Provider/retrieval timeouts, one same-provider retry, bounded
-excerpts, and the absence of user-supplied URL fetching are verified by tests.
+attempts. Verification has a 30-second cooperative request deadline and returns
+a sanitized `504 REQUEST_TIMEOUT` when exceeded. Provider/retrieval timeouts, one
+same-provider retry, bounded excerpts, and the absence of user-supplied URL
+fetching are verified by tests.
 
 Do not call this a public deployment until the compose build, both probes, the
 offline verification, and the browser/API integration have been rerun from a

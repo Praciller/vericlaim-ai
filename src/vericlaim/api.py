@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -86,11 +87,23 @@ def readiness() -> ReadinessResponse:
 
 
 @app.post("/api/v1/claims/verify", response_model=VerificationResult)
-def verify_claim(request: VerificationRequest) -> VerificationResult:
+async def verify_claim(request: VerificationRequest) -> VerificationResult:
     try:
-        result = workflow.verify(request)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                workflow.verify,
+                request,
+                timeout_seconds=settings.request_timeout_seconds,
+            ),
+            timeout=settings.request_timeout_seconds + 0.25,
+        )
         database.save(result)
         return result
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail={"code": "REQUEST_TIMEOUT", "message": "verification timed out safely"},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
