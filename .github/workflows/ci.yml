@@ -18,12 +18,12 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv venv
       - run: uv pip install -e ".[dev]"
-      - run: pytest
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: mypy src
+      - run: uv run pytest
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
       - run: git diff --check
-      - run: python scripts/eval_scifact.py --dataset-dir evals/fixtures/scifact/data --manifest evals/fixtures/scifact/manifest.json --architecture all --profile smoke --offline --dry-run
+      - run: uv run python scripts/eval_scifact.py --dataset-dir evals/fixtures/scifact/data --manifest evals/fixtures/scifact/manifest.json --architecture all --profile smoke --offline --dry-run
 
   frontend:
     runs-on: ubuntu-latest
