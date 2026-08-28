@@ -16,6 +16,8 @@ build/
 .env.*
 !.env.example
 data/
+!evals/fixtures/scifact/data/
+!evals/fixtures/scifact/data/**
 *.db
 *.sqlite
 
