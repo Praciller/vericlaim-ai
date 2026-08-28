@@ -12,6 +12,7 @@ VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learni
 - Provider responses normalize configured/actual model IDs, finish reason, latency, usage, quota metadata, and categorized failures. Cerebras remains representable as configured-but-disabled, and OpenRouter is restricted to free routes.
 - OpenAlex and Crossref normalized source adapters with explicit HTTP timeouts and metadata-versus-abstract evidence levels. arXiv is an interface placeholder until its response parsing contract is added.
 - Minimal Next.js UI with Overview-style result, evidence, sources, conditions, limitations, and run metadata.
+- Server-side request bounds for claim size, atomic claims, retrieval queries, evidence candidates, and provider calls.
 - Evaluation fixtures/metrics for a future SciFact adapter. No benchmark result is claimed.
 
 Supported verdicts are `SUPPORTED`, `REFUTED`, `MIXED`, `INSUFFICIENT_EVIDENCE`, and `NON_VERIFIABLE`. Confidence means confidence in the verdict given the evidence retrieved by this run, not the probability that the claim is objectively true. Production confidence is currently a deterministic evidence-rule heuristic (including the explicit `MIXED` heuristic value 0.65); it is not calibrated probability.
@@ -115,7 +116,9 @@ GET  /api/v1/providers/status
 
 The verification endpoint completes synchronously for the MVP. Offline mode uses the deterministic fixture source. The explicit live E2E boundary sets `LIVE_RETRIEVAL_ENABLED=true` and uses OpenAlex/Crossref; metadata-only records are persisted as sources but cannot become evidence. Each run stores claims, atomic claims, queries, sources, evidence, assessments, verdict details, agent runs, provider usage, and fallback breadcrumbs. Every final evidence reference is validated against the same run's stored evidence.
 
-The result `issue_code` is an operational signal separate from the verdict. It can report `PROVIDER_UNAVAILABLE`, `QUOTA_EXHAUSTED`, `PROVIDER_RATE_LIMIT`, `PROVIDER_TIMEOUT`, `PROVIDER_AUTHENTICATION`, `PROVIDER_RESPONSE_INVALID`, or `RETRIEVAL_UNAVAILABLE`. A degraded result remains inspectable, but the UI explicitly tells the user to inspect the run trace before relying on provider-assisted output. `INSUFFICIENT_EVIDENCE` remains a verdict label, not a provider failure.
+The result `issue_code` is an operational signal separate from the verdict. It can report `PROVIDER_UNAVAILABLE`, `QUOTA_EXHAUSTED`, `PROVIDER_RATE_LIMIT`, `PROVIDER_TIMEOUT`, `PROVIDER_AUTHENTICATION`, `PROVIDER_RESPONSE_INVALID`, `RETRIEVAL_UNAVAILABLE`, or `REQUEST_LIMIT_EXCEEDED`. A degraded result remains inspectable, but the UI explicitly tells the user to inspect the run trace before relying on provider-assisted output. `INSUFFICIENT_EVIDENCE` remains a verdict label, not a provider failure.
+
+The API enforces conservative per-request bounds: a 2,000-character claim, at most 8 atomic claims, 16 retrieval queries, 32 evidence candidates, and 8 provider-call attempts. Provider and retrieval adapters also use explicit timeouts, retries are bounded to one same-provider retry, excerpts are capped, and the MVP does not fetch user-supplied URLs.
 
 The evidence graph is a read-only projection of the stored run: claim → atomic claim → evidence → source. It performs no new retrieval or provider call, exposes source provenance and evidence level, and keeps evidence excerpts inspectable in the UI. This makes the local fixture demo useful even when external providers are unavailable.
 

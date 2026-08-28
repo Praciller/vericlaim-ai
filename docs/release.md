@@ -41,6 +41,11 @@ paid dependency. `/health` is liveness, `/ready` is database plus enabled
 provider readiness, and the verification smoke must preserve the run/evidence
 and evidence-graph endpoints.
 
+The API also applies hard per-request bounds: 2,000 claim characters, 8 atomic
+claims, 16 retrieval queries, 32 evidence candidates, and 8 provider-call
+attempts. Provider/retrieval timeouts, one same-provider retry, bounded
+excerpts, and the absence of user-supplied URL fetching are verified by tests.
+
 Do not call this a public deployment until the compose build, both probes, the
 offline verification, and the browser/API integration have been rerun from a
 committed release candidate. Tag `v0.1.0` only after that evidence exists.

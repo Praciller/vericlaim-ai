@@ -39,7 +39,7 @@ The mock provider is the default reproducibility boundary. OpenAI-compatible ada
 
 The workflow calls deterministic rules first, then uses bounded provider calls for batched classification, audit, judgment, critique, and Thai semantic review when configured. Provider text is parsed as a candidate only; Pydantic/domain constraints and `validate_result` remain authoritative. Normal tests force live flags off. Live smoke tests are explicit and never print response bodies.
 
-The API separates `/health` (liveness) from `/ready` (database plus enabled-provider readiness). Provider failures are surfaced as a safe `issue_code` on a degraded result, while `INSUFFICIENT_EVIDENCE` remains a domain verdict. Neither readiness nor provider-status endpoints reveal credentials or raw vendor payloads.
+The API separates `/health` (liveness) from `/ready` (database plus enabled-provider readiness). Provider failures are surfaced as a safe `issue_code` on a degraded result, while `INSUFFICIENT_EVIDENCE` remains a domain verdict. Neither readiness nor provider-status endpoints reveal credentials or raw vendor payloads. Request handling enforces bounded claim size, atomic claims, retrieval queries, evidence candidates, and provider-call attempts; adapter timeouts, one same-provider retry, and bounded excerpts prevent unbounded work. The MVP has no user-supplied URL fetch, so SSRF is not an inference path.
 
 ## Evidence boundary
 

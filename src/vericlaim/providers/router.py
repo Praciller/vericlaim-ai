@@ -43,6 +43,18 @@ class RouterResult:
     fallbacks: list[str]
 
 
+@dataclass
+class ProviderCallBudget:
+    limit: int
+    attempted: int = 0
+
+    def reserve(self) -> bool:
+        if self.attempted >= self.limit:
+            return False
+        self.attempted += 1
+        return True
+
+
 class ProviderRouter:
     def __init__(self, settings: Settings, providers: dict[str, LLMProvider] | None = None) -> None:
         self.settings = settings
@@ -136,7 +148,14 @@ class ProviderRouter:
             ProviderErrorCategory.SERVER_ERROR,
         }
 
-    def invoke(self, task: str, prompt: str, *, reproducible: bool = False) -> RouterResult:
+    def invoke(
+        self,
+        task: str,
+        prompt: str,
+        *,
+        reproducible: bool = False,
+        budget: ProviderCallBudget | None = None,
+    ) -> RouterResult:
         last_error: ProviderException | None = None
         fallbacks: list[str] = []
         for name in self._candidates(task, reproducible):
@@ -146,6 +165,13 @@ class ProviderRouter:
             attempt = 0
             while True:
                 try:
+                    if budget is not None and not budget.reserve():
+                        raise ProviderException(
+                            "per-request provider call limit reached",
+                            category=ProviderErrorCategory.RESOURCE_LIMIT,
+                            retryable=False,
+                            fallback_allowed=False,
+                        )
                     response = provider.generate(ProviderRequest(task=task, prompt=prompt))
                     self._last_status[name] = response.status
                     self._quota[name] = (

@@ -36,7 +36,7 @@ from .domain.models import (
     utc_now,
 )
 from .providers.base import ProviderException, ProviderResponse
-from .providers.router import ProviderRouter
+from .providers.router import ProviderCallBudget, ProviderRouter
 from .retrieval.adapters import CrossrefSource, OpenAlexSource, RetrievalError
 from .retrieval.base import EvidenceSource
 from .retrieval.fixture import FixtureSource
@@ -61,6 +61,7 @@ class WorkflowState:
     status: RunStatus = RunStatus.COMPLETED
     issue_code: RunIssueCode | None = None
     limitations: list[str] = field(default_factory=list)
+    provider_budget: ProviderCallBudget | None = None
 
 
 class VerificationWorkflow:
@@ -105,7 +106,14 @@ class VerificationWorkflow:
 
     def verify(self, request: VerificationRequest | dict[str, str]) -> VerificationResult:
         validated_request = VerificationRequest.model_validate(request)
-        state_value = self.graph.invoke(WorkflowState(request=validated_request))
+        state_value = self.graph.invoke(
+            WorkflowState(
+                request=validated_request,
+                provider_budget=ProviderCallBudget(
+                    limit=self.settings.max_provider_calls_per_request
+                ),
+            )
+        )
         state = WorkflowState(**state_value) if isinstance(state_value, dict) else state_value
         result = self._to_result(state)
         return validate_result(result)
@@ -135,7 +143,11 @@ class VerificationWorkflow:
             )
             return None
         try:
-            router_result = self.router.invoke(task, prompt or action.__doc__ or task)
+            router_result = self.router.invoke(
+                task,
+                prompt or action.__doc__ or task,
+                budget=state.provider_budget,
+            )
             state.provider_usage.append(router_result.usage)
             provider = router_result.response.provider
             model = router_result.response.actual_model or router_result.response.model
@@ -183,6 +195,7 @@ class VerificationWorkflow:
             ProviderErrorCategory.AUTHENTICATION: RunIssueCode.PROVIDER_AUTHENTICATION,
             ProviderErrorCategory.MALFORMED_RESPONSE: RunIssueCode.PROVIDER_RESPONSE_INVALID,
             ProviderErrorCategory.INCOMPLETE_RESPONSE: RunIssueCode.PROVIDER_RESPONSE_INVALID,
+            ProviderErrorCategory.RESOURCE_LIMIT: RunIssueCode.REQUEST_LIMIT_EXCEEDED,
         }
         return mapping.get(category, RunIssueCode.PROVIDER_UNAVAILABLE)
 
@@ -255,7 +268,9 @@ class VerificationWorkflow:
 
         self._record_agent(state, "claim_decomposer", "claim_decomposition", action)
         assert state.claim is not None
-        state.atomic_claims = decompose_claim(state.claim)
+        state.atomic_claims = decompose_claim(
+            state.claim, max_atomic_claims=self.settings.max_atomic_claims_per_request
+        )
         if len(state.atomic_claims) > 1 and self.router.has_provider("groq"):
             advisory = self._record_agent(
                 state,
@@ -323,6 +338,8 @@ class VerificationWorkflow:
                     ),
                 ]
             )
+        if len(state.queries) > self.settings.max_retrieval_queries_per_request:
+            raise ValueError("claim exceeds the maximum retrieval query limit")
         return state
 
     def _research(self, state: WorkflowState) -> WorkflowState:
@@ -338,7 +355,11 @@ class VerificationWorkflow:
             return state
         source_by_id: dict[str, Source] = {}
         metadata_only_seen = False
+        candidates_seen = 0
+        candidate_limit_hit = False
         for query in state.queries:
+            if candidate_limit_hit:
+                break
             for retriever in self.retrievers:
                 try:
                     records = retriever.search(query.query, limit=2)
@@ -350,6 +371,16 @@ class VerificationWorkflow:
                         state.limitations.append(limitation)
                     continue
                 for record in records:
+                    if candidates_seen >= self.settings.max_evidence_candidates_per_request:
+                        candidate_limit_hit = True
+                        state.status = RunStatus.DEGRADED
+                        state.issue_code = state.issue_code or RunIssueCode.REQUEST_LIMIT_EXCEEDED
+                        state.limitations.append(
+                            "The evidence candidate limit was reached; remaining retrieval "
+                            "results were not processed."
+                        )
+                        break
+                    candidates_seen += 1
                     try:
                         evidence_level = EvidenceLevel(record.evidence_level)
                     except ValueError:
@@ -380,6 +411,8 @@ class VerificationWorkflow:
                             provenance=record.provenance,
                         )
                     )
+                if candidate_limit_hit:
+                    break
         state.sources = list(source_by_id.values())
         if metadata_only_seen:
             state.limitations.append(

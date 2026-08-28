@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +31,10 @@ class Settings(BaseSettings):
     thaillm_enabled: bool = False
     thaillm_model: str = "OpenThaiGPT-ThaiLLM-8B-Instruct-v7.2"
     allow_non_reproducible_openrouter: bool = False
+    max_atomic_claims_per_request: int = Field(default=8, ge=1, le=16)
+    max_retrieval_queries_per_request: int = Field(default=16, ge=1, le=32)
+    max_evidence_candidates_per_request: int = Field(default=32, ge=1, le=64)
+    max_provider_calls_per_request: int = Field(default=8, ge=0, le=16)
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
