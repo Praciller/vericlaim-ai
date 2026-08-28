@@ -1,0 +1,26 @@
+{
+  "dataset_name": "SciFact fixture",
+  "source": "local-test-fixture",
+  "revision": "fixture-v1",
+  "downloaded_at": "2026-01-01T00:00:00+00:00",
+  "data_directory": "data",
+  "split_names": ["train", "dev", "test"],
+  "label_distribution": {
+    "train": {"CONTRADICT": 1, "NOT_ENOUGH_INFO": 1, "SUPPORT": 1},
+    "dev": {"CONTRADICT": 1, "NOT_ENOUGH_INFO": 1, "SUPPORT": 1},
+    "test": {}
+  },
+  "split_rows": {
+    "train": {"rows": 3, "label_distribution": {"CONTRADICT": 1, "NOT_ENOUGH_INFO": 1, "SUPPORT": 1}},
+    "dev": {"rows": 3, "label_distribution": {"CONTRADICT": 1, "NOT_ENOUGH_INFO": 1, "SUPPORT": 1}},
+    "test": {"rows": 3, "label_distribution": {}}
+  },
+  "corpus_rows": 3,
+  "archive": null,
+  "files": [
+    {"path": "claims_dev.jsonl", "bytes": 380, "rows": 3, "label_distribution": {"CONTRADICT": 1, "NOT_ENOUGH_INFO": 1, "SUPPORT": 1}, "sha256": "55b25d3be7ba1b869941bd0e751a417f4016e41b86d69e1cc06e8a1bba4fcaed"},
+    {"path": "claims_test.jsonl", "bytes": 194, "rows": 3, "label_distribution": {}, "sha256": "6cef9a7adad10066ad35f1556e026292173bccd5a435a6b1ce6ea6797d8d7009"},
+    {"path": "claims_train.jsonl", "bytes": 380, "rows": 3, "label_distribution": {"CONTRADICT": 1, "NOT_ENOUGH_INFO": 1, "SUPPORT": 1}, "sha256": "55b25d3be7ba1b869941bd0e751a417f4016e41b86d69e1cc06e8a1bba4fcaed"},
+    {"path": "corpus.jsonl", "bytes": 361, "rows": 3, "sha256": "b44b3d031322537f7a83f6a60677f640d4c13845687e6a48672c11286b087a71"}
+  ]
+}

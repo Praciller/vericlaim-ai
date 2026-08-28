@@ -1,0 +1,14 @@
+[
+  {
+    "id": "fixture-1",
+    "claim": "Retrieval augmentation can reduce hallucinations under evaluated conditions.",
+    "label": "SUPPORTS",
+    "evidence_ids": ["fixture-support-1"]
+  },
+  {
+    "id": "fixture-2",
+    "claim": "Retrieval augmentation eliminates hallucinations in every setting.",
+    "label": "REFUTED",
+    "evidence_ids": ["fixture-counter-1"]
+  }
+]

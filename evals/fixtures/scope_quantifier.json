@@ -1,0 +1,27 @@
+[
+  {
+    "id": "scope-1",
+    "claim": "This method always works.",
+    "expected": {"quantifiers": ["always"], "percentages": [], "multipliers": [], "conditional": false}
+  },
+  {
+    "id": "scope-2",
+    "claim": "The method never fails under evaluation.",
+    "expected": {"quantifiers": ["never"], "percentages": [], "multipliers": [], "conditional": true}
+  },
+  {
+    "id": "scope-3",
+    "claim": "All tests pass with a 2x speedup.",
+    "expected": {"quantifiers": ["all"], "percentages": [], "multipliers": ["2x"], "conditional": false}
+  },
+  {
+    "id": "scope-4",
+    "claim": "The model improves accuracy by 12.5% when tuned.",
+    "expected": {"quantifiers": [], "percentages": ["12.5%"], "multipliers": [], "conditional": true}
+  },
+  {
+    "id": "scope-5",
+    "claim": "This is the best and fastest implementation.",
+    "expected": {"quantifiers": ["best", "fastest"], "percentages": [], "multipliers": [], "conditional": false}
+  }
+]

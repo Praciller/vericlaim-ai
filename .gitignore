@@ -1,0 +1,40 @@
+# Python environments and generated caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local secrets, runtime state, and databases
+.env
+.env.*
+!.env.example
+data/
+*.db
+*.sqlite
+
+# Frontend dependencies and build output
+*.tsbuildinfo
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+
+# Downloaded benchmark data and generated evaluation output
+evals/data/scifact/data/
+evals/data/scifact/data.tar.gz
+evals/cache/
+evals/cache-*/
+evals/dry-run-results/
+evals/results-offline-smoke/
+evals/results/*
+!evals/results/reference/
+!evals/results/reference/**
+evals/results/local/
