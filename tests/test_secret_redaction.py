@@ -163,6 +163,25 @@ def test_api_error_response_does_not_expose_exception_text(
     assert "verification failed safely" in response.text
 
 
+def test_api_validation_error_does_not_expose_exception_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingWorkflow:
+        def verify(self, request: object, *, timeout_seconds: float) -> object:  # noqa: ARG002
+            raise ValueError(f"invalid configuration contains {GEMINI_SECRET}")
+
+    monkeypatch.setattr(api_module, "workflow", FailingWorkflow())
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/api/v1/claims/verify", json={"claim": "RAG eliminates hallucinations"}
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "verification request is invalid"
+    assert GEMINI_SECRET not in response.text
+
+
 def test_readiness_failure_does_not_expose_exception_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

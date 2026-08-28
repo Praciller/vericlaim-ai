@@ -29,6 +29,15 @@ database = Database(settings.database_url)
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
 
+_SAFE_VALIDATION_MESSAGES = frozenset(
+    {
+        "claim contains control characters",
+        "claim must not be blank",
+        "claim exceeds the maximum atomic claim limit",
+        "claim exceeds the maximum retrieval query limit",
+    }
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -99,18 +108,26 @@ async def verify_claim(request: VerificationRequest) -> VerificationResult:
         )
         database.save(result)
         return result
-    except TimeoutError as exc:
+    except TimeoutError:
         raise HTTPException(
             status_code=504,
             detail={"code": "REQUEST_TIMEOUT", "message": "verification timed out safely"},
-        ) from exc
+        ) from None
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:
+        message = str(exc)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                message
+                if message in _SAFE_VALIDATION_MESSAGES
+                else "verification request is invalid"
+            ),
+        ) from None
+    except Exception:
         # Do not expose provider prompts or vendor error payloads.
         raise HTTPException(
             status_code=500, detail="verification failed safely; inspect server logs"
-        ) from exc
+        ) from None
 
 
 @app.get("/api/v1/runs/{run_id}", response_model=VerificationResult)
