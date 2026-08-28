@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from vericlaim.config import Settings
+from vericlaim.config import Settings, secret_value
 from vericlaim.domain.models import ProviderErrorCategory
 from vericlaim.providers.base import (
     OpenAICompatibleProvider,
@@ -68,11 +68,12 @@ def main() -> int:
         provider = router.providers.get(name)
         if not status.enabled or provider is None:
             disabled_model_status = "not_checked"
-            if name == "cerebras" and settings.cerebras_api_key:
+            cerebras_api_key = secret_value(settings.cerebras_api_key)
+            if name == "cerebras" and cerebras_api_key:
                 disabled_probe = OpenAICompatibleProvider(
                     "cerebras",
                     settings.cerebras_model,
-                    settings.cerebras_api_key,
+                    cerebras_api_key,
                     "https://api.cerebras.ai/v1",
                 )
                 disabled_model_status = model_check(name, disabled_probe)

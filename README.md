@@ -91,6 +91,10 @@ See [docs/evaluation.md](docs/evaluation.md) for dataset versioning, label mappi
 ## Providers and free-tier routing
 
 Copy `.env.example` to `.env`. `MOCK_PROVIDER_ENABLED=true` is the safe default. Only add provider keys you are authorized to use; `.env` remains ignored and local-only.
+Provider keys are loaded as redacted `SecretStr` values and are unwrapped only at
+the outbound provider boundary. Do not log `Settings`, serialize raw settings,
+or place replacement credentials in Git. Rotate and revoke any key exposed during
+development before using a preview or production environment.
 
 The default specialization is deterministic rules first, Groq for claim/decomposition/classification assistance, Gemini for audit/judgment, OKMD for critique, ThaiLLM for Thai semantic review, and OpenRouter only as a last-resort free runtime fallback. `openrouter/free` is non-deterministic and is excluded from reproducible routing unless explicitly allowed. Cerebras is disabled by default because free inference must be re-probed before enabling.
 

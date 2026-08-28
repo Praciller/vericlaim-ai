@@ -16,7 +16,7 @@ from uuid import uuid4
 import httpx
 
 from evals.metrics import ABSTENTION_LABELS, compute_metrics
-from vericlaim.config import Settings
+from vericlaim.config import Settings, secret_value
 from vericlaim.providers.base import (
     GeminiProvider,
     OpenAICompatibleProvider,
@@ -1853,13 +1853,14 @@ def _availability(settings: Settings, providers: tuple[str, ...] | None = None) 
     results: dict[str, Any] = {}
     requested = tuple(dict.fromkeys(providers or ("groq", "gemini")))
     if "groq" in requested:
-        if not settings.groq_api_key or not settings.groq_enabled:
+        groq_api_key = secret_value(settings.groq_api_key)
+        if not groq_api_key or not settings.groq_enabled:
             results["groq"] = {"status": "UNCONFIGURED", "configured_model": settings.groq_model}
         else:
             try:
                 response = httpx.get(
                     "https://api.groq.com/openai/v1/models",
-                    headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                    headers={"Authorization": f"Bearer {groq_api_key}"},
                     timeout=10,
                 )
                 data = response.json() if response.status_code < 400 else {}
@@ -1879,7 +1880,8 @@ def _availability(settings: Settings, providers: tuple[str, ...] | None = None) 
                 "configured_model": settings.groq_model,
             }
     if "gemini" in requested:
-        if not settings.gemini_api_key or not settings.gemini_enabled:
+        gemini_api_key = secret_value(settings.gemini_api_key)
+        if not gemini_api_key or not settings.gemini_enabled:
             results["gemini"] = {
                 "status": "UNCONFIGURED",
                 "configured_model": settings.gemini_model,
@@ -1888,7 +1890,7 @@ def _availability(settings: Settings, providers: tuple[str, ...] | None = None) 
             try:
                 response = httpx.get(
                     "https://generativelanguage.googleapis.com/v1beta/models",
-                    params={"key": settings.gemini_api_key},
+                    params={"key": gemini_api_key},
                     timeout=10,
                 )
                 data = response.json() if response.status_code < 400 else {}
@@ -1910,7 +1912,8 @@ def _availability(settings: Settings, providers: tuple[str, ...] | None = None) 
                 "configured_model": settings.gemini_model,
             }
     if "okmd" in requested:
-        if not settings.okmd_api_key or not settings.okmd_enabled:
+        okmd_api_key = secret_value(settings.okmd_api_key)
+        if not okmd_api_key or not settings.okmd_enabled:
             results["okmd"] = {
                 "status": "UNCONFIGURED",
                 "configured_model": settings.okmd_model,
@@ -1919,7 +1922,7 @@ def _availability(settings: Settings, providers: tuple[str, ...] | None = None) 
             try:
                 response = httpx.get(
                     f"{OKMD_BASE_URL}/models",
-                    headers={"Authorization": f"Bearer {settings.okmd_api_key}"},
+                    headers={"Authorization": f"Bearer {okmd_api_key}"},
                     timeout=10,
                 )
                 data = response.json() if response.status_code < 400 else {}
@@ -1963,18 +1966,18 @@ def build_live_providers(
         providers["groq"] = OpenAICompatibleProvider(
             "groq",
             settings.groq_model,
-            settings.groq_api_key or "",
+            secret_value(settings.groq_api_key) or "",
             "https://api.groq.com/openai/v1",
         )
     if "gemini" in requested:
         providers["gemini"] = GeminiProvider(
-            "gemini", settings.gemini_model, settings.gemini_api_key or ""
+            "gemini", settings.gemini_model, secret_value(settings.gemini_api_key) or ""
         )
     if "okmd" in requested:
         providers["okmd"] = OpenAICompatibleProvider(
             "okmd",
             settings.okmd_model,
-            settings.okmd_api_key or "",
+            secret_value(settings.okmd_api_key) or "",
             OKMD_BASE_URL,
         )
     return providers, availability

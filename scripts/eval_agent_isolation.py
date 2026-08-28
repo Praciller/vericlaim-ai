@@ -40,7 +40,7 @@ from evals.scifact.runner import (  # noqa: E402
     select_sample,
 )
 
-from vericlaim.config import Settings  # noqa: E402
+from vericlaim.config import Settings, secret_value  # noqa: E402
 from vericlaim.providers.base import ProviderException, ProviderRequest  # noqa: E402
 
 DEFAULT_SAMPLE_MANIFEST = "evals/results/scifact-smoke-20260825T165453Z-e1fd1ba6/manifest.json"
@@ -315,7 +315,7 @@ def _provider_states(
     values: list[ProviderBudgetState] = []
     for provider in providers:
         enabled = bool(getattr(settings, f"{provider}_enabled", False))
-        configured = bool(getattr(settings, f"{provider}_api_key", None))
+        configured = bool(secret_value(getattr(settings, f"{provider}_api_key", None)))
         model = str(getattr(settings, f"{provider}_model", FIXED_MODELS[provider]))
         availability_status = (
             str((availability or {}).get(provider, {}).get("status"))

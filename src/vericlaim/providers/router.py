@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from ..config import Settings
+from ..config import Settings, secret_value
 from ..domain.models import ProviderErrorCategory, ProviderStatus, ProviderUsage
 from .base import (
     GeminiProvider,
@@ -80,49 +80,55 @@ class ProviderRouter:
         providers: dict[str, LLMProvider] = {}
         if self.settings.mock_provider_enabled:
             providers["mock"] = MockProvider()
-        if self.settings.groq_enabled and self.settings.groq_api_key:
+        groq_api_key = secret_value(self.settings.groq_api_key)
+        if self.settings.groq_enabled and groq_api_key:
             providers["groq"] = OpenAICompatibleProvider(
                 "groq",
                 self.settings.groq_model,
-                self.settings.groq_api_key,
+                groq_api_key,
                 "https://api.groq.com/openai/v1",
             )
-        if self.settings.gemini_enabled and self.settings.gemini_api_key:
+        gemini_api_key = secret_value(self.settings.gemini_api_key)
+        if self.settings.gemini_enabled and gemini_api_key:
             providers["gemini"] = GeminiProvider(
-                "gemini", self.settings.gemini_model, self.settings.gemini_api_key
+                "gemini", self.settings.gemini_model, gemini_api_key
             )
-        if self.settings.okmd_enabled and self.settings.okmd_api_key:
+        okmd_api_key = secret_value(self.settings.okmd_api_key)
+        if self.settings.okmd_enabled and okmd_api_key:
             providers["okmd"] = OKMDProvider(
                 "okmd",
                 self.settings.okmd_model,
-                self.settings.okmd_api_key,
+                okmd_api_key,
                 "https://gen.ai.kku.ac.th/okmd/api/v1",
             )
-        if self.settings.thaillm_enabled and self.settings.thaillm_api_key:
+        thaillm_api_key = secret_value(self.settings.thaillm_api_key)
+        if self.settings.thaillm_enabled and thaillm_api_key:
             providers["thaillm"] = ThaiLLMProvider(
                 "thaillm",
                 self.settings.thaillm_model,
-                self.settings.thaillm_api_key,
+                thaillm_api_key,
                 "https://thaillm.or.th/api/v1",
             )
-        if self.settings.cerebras_enabled and self.settings.cerebras_api_key:
+        cerebras_api_key = secret_value(self.settings.cerebras_api_key)
+        if self.settings.cerebras_enabled and cerebras_api_key:
             providers["cerebras"] = OpenAICompatibleProvider(
                 "cerebras",
                 self.settings.cerebras_model,
-                self.settings.cerebras_api_key,
+                cerebras_api_key,
                 "https://api.cerebras.ai/v1",
             )
-        if self.settings.openrouter_api_key and not self._is_free_openrouter_model(
+        openrouter_api_key = secret_value(self.settings.openrouter_api_key)
+        if openrouter_api_key and not self._is_free_openrouter_model(
             self.settings.openrouter_model
         ):
             self._disabled_notes["openrouter"] = (
                 "OpenRouter disabled because the configured route is not allowlisted as free-only."
             )
-        elif self.settings.openrouter_enabled and self.settings.openrouter_api_key:
+        elif self.settings.openrouter_enabled and openrouter_api_key:
             providers["openrouter"] = OpenAICompatibleProvider(
                 "openrouter",
                 self.settings.openrouter_model,
-                self.settings.openrouter_api_key,
+                openrouter_api_key,
                 "https://openrouter.ai/api/v1",
             )
         return providers
@@ -236,7 +242,7 @@ class ProviderRouter:
     def _configured_and_model(self, name: str) -> tuple[bool, str]:
         if name == "mock":
             return True, "deterministic-fixture-v1"
-        key = getattr(self.settings, f"{name}_api_key", None)
+        key = secret_value(getattr(self.settings, f"{name}_api_key", None))
         model = getattr(self.settings, f"{name}_model", "not configured")
         return bool(key), model
 

@@ -223,7 +223,7 @@ def _quota_values(data: dict[str, Any]) -> tuple[int | None, int | None, int | N
 class OpenAICompatibleProvider:
     name: str
     model: str
-    api_key: str
+    api_key: str = field(repr=False)
     base_url: str
     supports_structured_output: bool = True
     timeout_seconds: float = 20.0
@@ -251,14 +251,14 @@ class OpenAICompatibleProvider:
                     else self.timeout_seconds
                 ),
             )
-        except httpx.TimeoutException as exc:
+        except httpx.TimeoutException:
             raise ProviderException(
                 "provider request timed out", category=ProviderErrorCategory.TIMEOUT
-            ) from exc
-        except httpx.HTTPError as exc:
+            ) from None
+        except httpx.HTTPError:
             raise ProviderException(
                 "provider network request failed", category=ProviderErrorCategory.NETWORK
-            ) from exc
+            ) from None
         latency_ms = int((time.perf_counter() - started) * 1000)
         retry_after = retry_after_seconds(response.headers.get("Retry-After"))
         try:
@@ -305,11 +305,11 @@ class OpenAICompatibleProvider:
             text = extract_final_content(content, finish_reason)
         except ProviderException:
             raise
-        except (ValueError, KeyError, IndexError, TypeError) as exc:
+        except (ValueError, KeyError, IndexError, TypeError):
             raise ProviderException(
                 "provider response was malformed",
                 category=ProviderErrorCategory.MALFORMED_RESPONSE,
-            ) from exc
+            ) from None
         usage = data.get("usage") or {}
         quota_limit, quota_used, quota_remaining = _quota_values(data)
         actual_model = data.get("model") if isinstance(data.get("model"), str) else self.model
@@ -336,7 +336,7 @@ class OpenAICompatibleProvider:
 class GeminiProvider:
     name: str
     model: str
-    api_key: str
+    api_key: str = field(repr=False)
     supports_structured_output: bool = True
     timeout_seconds: float = 20.0
 
@@ -362,14 +362,14 @@ class GeminiProvider:
                     else self.timeout_seconds
                 ),
             )
-        except httpx.TimeoutException as exc:
+        except httpx.TimeoutException:
             raise ProviderException(
                 "provider request timed out", category=ProviderErrorCategory.TIMEOUT
-            ) from exc
-        except httpx.HTTPError as exc:
+            ) from None
+        except httpx.HTTPError:
             raise ProviderException(
                 "provider network request failed", category=ProviderErrorCategory.NETWORK
-            ) from exc
+            ) from None
         latency_ms = int((time.perf_counter() - started) * 1000)
         retry_after = retry_after_seconds(response.headers.get("Retry-After"))
         if response.status_code >= 400:
@@ -401,11 +401,11 @@ class GeminiProvider:
             text = extract_final_content(content, finish_reason)
         except ProviderException:
             raise
-        except (ValueError, KeyError, IndexError, TypeError) as exc:
+        except (ValueError, KeyError, IndexError, TypeError):
             raise ProviderException(
                 "provider response was malformed",
                 category=ProviderErrorCategory.MALFORMED_RESPONSE,
-            ) from exc
+            ) from None
         usage = data.get("usageMetadata") or {}
         actual_model = data.get("modelVersion")
         return ProviderResponse(
