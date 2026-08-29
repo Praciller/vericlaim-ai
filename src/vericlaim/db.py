@@ -129,6 +129,7 @@ class Database:
                     completed_at=result.completed_at,
                 )
             )
+            session.flush()
             session.add(
                 ClaimRow(
                     claim_id=result.claim.claim_id,
