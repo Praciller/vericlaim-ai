@@ -127,10 +127,15 @@ async def verify_claim(request: VerificationRequest) -> VerificationResult:
         ) from None
     except Exception as exc:
         # Do not expose provider prompts or vendor error payloads.
+        database_error = getattr(exc, "orig", None)
+        diagnostic = getattr(database_error, "diag", None)
         logger.error(
-            "verification_failed error_type=%s cause_type=%s",
+            "verification_failed error_type=%s cause_type=%s database_table=%s "
+            "database_constraint=%s",
             type(exc).__name__,
             type(exc.__cause__).__name__ if exc.__cause__ is not None else "none",
+            getattr(diagnostic, "table_name", "none"),
+            getattr(diagnostic, "constraint_name", "none"),
         )
         raise HTTPException(
             status_code=500, detail="verification failed safely; inspect server logs"
