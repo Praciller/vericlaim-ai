@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -25,6 +26,7 @@ from .providers.router import ProviderRouter
 from .workflow import VerificationWorkflow
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 database = Database(settings.database_url)
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
@@ -123,8 +125,13 @@ async def verify_claim(request: VerificationRequest) -> VerificationResult:
                 else "verification request is invalid"
             ),
         ) from None
-    except Exception:
+    except Exception as exc:
         # Do not expose provider prompts or vendor error payloads.
+        logger.error(
+            "verification_failed error_type=%s cause_type=%s",
+            type(exc).__name__,
+            type(exc.__cause__).__name__ if exc.__cause__ is not None else "none",
+        )
         raise HTTPException(
             status_code=500, detail="verification failed safely; inspect server logs"
         ) from None
