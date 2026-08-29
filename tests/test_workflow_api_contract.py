@@ -1,11 +1,25 @@
+import time
+
+import pytest
 from fastapi.testclient import TestClient
 
 import vericlaim.api as api_module
 from vericlaim.api import app
 from vericlaim.config import Settings
-from vericlaim.domain.models import ProviderErrorCategory, RunIssueCode, RunStatus
-from vericlaim.providers.base import MockProvider, ProviderException, ProviderRequest
+from vericlaim.domain.models import (
+    ProviderErrorCategory,
+    RunIssueCode,
+    RunStatus,
+    VerificationRequest,
+)
+from vericlaim.providers.base import (
+    MockProvider,
+    ProviderException,
+    ProviderRequest,
+    ProviderResponse,
+)
 from vericlaim.providers.router import ProviderRouter
+from vericlaim.retrieval.base import RetrievedRecord
 from vericlaim.workflow import VerificationWorkflow
 
 
@@ -65,6 +79,114 @@ def test_verification_api_contract():
         "NON_VERIFIABLE",
     }
     assert "provider_usage" in payload
+
+
+def test_verification_api_rejects_oversized_claim():
+    with TestClient(app) as client:
+        response = client.post("/api/v1/claims/verify", json={"claim": "x" * 2001})
+
+    assert response.status_code == 422
+
+
+def test_verification_api_returns_sanitized_timeout(monkeypatch):
+    class SlowWorkflow:
+        def verify(self, request: VerificationRequest, *, timeout_seconds: float) -> object:
+            time.sleep(0.6)
+            return object()
+
+    monkeypatch.setattr(api_module, "workflow", SlowWorkflow())
+    monkeypatch.setattr(api_module.settings, "request_timeout_seconds", 0.05)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/claims/verify", json={"claim": "RAG eliminates hallucinations"}
+        )
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == {
+        "code": "REQUEST_TIMEOUT",
+        "message": "verification timed out safely",
+    }
+
+
+def test_verification_api_rejects_excessive_atomic_claims():
+    claim = " and ".join(f"Claim {index} is testable" for index in range(1, 10))
+
+    with TestClient(app) as client:
+        response = client.post("/api/v1/claims/verify", json={"claim": claim})
+
+    assert response.status_code == 422
+    assert "atomic claim" in response.json()["detail"]
+
+
+def test_workflow_rejects_excessive_retrieval_queries():
+    workflow = VerificationWorkflow(
+        Settings(max_retrieval_queries_per_request=1, mock_provider_enabled=True)
+    )
+
+    with pytest.raises(ValueError, match="retrieval query"):
+        workflow.verify({"claim": "RAG eliminates hallucinations"})
+
+
+def test_workflow_bounds_evidence_candidates_per_request():
+    class ManyRecords:
+        name = "many-records"
+
+        def search(self, query: str, limit: int = 3) -> list[RetrievedRecord]:
+            return [
+                RetrievedRecord(
+                    source_id=f"source-{index}",
+                    title=f"Source {index}",
+                    source_type="test",
+                    url=f"https://example.test/{index}",
+                    doi=None,
+                    authors=[],
+                    published_at=None,
+                    abstract="Evidence excerpt.",
+                    provenance="test fixture",
+                    evidence_level="ABSTRACT_AVAILABLE",
+                )
+                for index in range(4)
+            ]
+
+    workflow = VerificationWorkflow(
+        Settings(max_evidence_candidates_per_request=1, mock_provider_enabled=True),
+        retrievers=[ManyRecords()],
+    )
+    result = workflow.verify({"claim": "RAG eliminates hallucinations"})
+
+    assert len(result.evidence) == 1
+    assert result.issue_code.value == "REQUEST_LIMIT_EXCEEDED"
+
+
+def test_workflow_enforces_provider_call_limit_per_request():
+    class CountingProvider:
+        name = "mock"
+        model = "counting-test"
+        supports_structured_output = True
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, request: ProviderRequest) -> ProviderResponse:
+            self.calls += 1
+            return ProviderResponse(
+                provider=self.name,
+                model=self.model,
+                text="{}",
+                finish_reason="stop",
+            )
+
+    provider = CountingProvider()
+    settings = Settings(max_provider_calls_per_request=1, mock_provider_enabled=True)
+    workflow = VerificationWorkflow(
+        settings,
+        router=ProviderRouter(settings, providers={"mock": provider}),
+    )
+    result = workflow.verify({"claim": "RAG eliminates hallucinations"})
+
+    assert provider.calls == 1
+    assert result.issue_code.value == "REQUEST_LIMIT_EXCEEDED"
 
 
 def test_provider_status_endpoint():

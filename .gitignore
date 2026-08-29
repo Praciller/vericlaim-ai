@@ -16,6 +16,8 @@ build/
 .env.*
 !.env.example
 data/
+!evals/fixtures/scifact/data/
+!evals/fixtures/scifact/data/**
 *.db
 *.sqlite
 
@@ -38,3 +40,5 @@ evals/results/*
 !evals/results/reference/
 !evals/results/reference/**
 evals/results/local/
+
+.vercel

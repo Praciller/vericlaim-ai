@@ -1,0 +1,3 @@
+{"id":1,"claim":"The method supports reliable evaluation results.","evidence":{"1":[{"label":"SUPPORT","sentences":[0]}]},"cited_doc_ids":[1]}
+{"id":2,"claim":"The method has failures under evaluation.","evidence":{"2":[{"label":"CONTRADICT","sentences":[0]}]},"cited_doc_ids":[2]}
+{"id":3,"claim":"A claim without a matching abstract is known.","evidence":{},"cited_doc_ids":[]}

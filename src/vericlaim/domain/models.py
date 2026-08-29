@@ -49,6 +49,7 @@ class RunIssueCode(StrEnum):
     PROVIDER_AUTHENTICATION = "PROVIDER_AUTHENTICATION"
     PROVIDER_RESPONSE_INVALID = "PROVIDER_RESPONSE_INVALID"
     RETRIEVAL_UNAVAILABLE = "RETRIEVAL_UNAVAILABLE"
+    REQUEST_LIMIT_EXCEEDED = "REQUEST_LIMIT_EXCEEDED"
 
 
 class ClaimAnalysis(BaseModel):
@@ -216,6 +217,7 @@ class ProviderErrorCategory(StrEnum):
     MALFORMED_RESPONSE = "malformed_response"
     INCOMPLETE_RESPONSE = "incomplete_response"
     SERVER_ERROR = "server_error"
+    RESOURCE_LIMIT = "resource_limit"
     UNKNOWN = "unknown"
 
 

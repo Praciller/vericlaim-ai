@@ -41,6 +41,21 @@ paid dependency. `/health` is liveness, `/ready` is database plus enabled
 provider readiness, and the verification smoke must preserve the run/evidence
 and evidence-graph endpoints.
 
+The API also applies hard per-request bounds: 2,000 claim characters, 8 atomic
+claims, 16 retrieval queries, 32 evidence candidates, and 8 provider-call
+attempts. Verification has a 30-second cooperative request deadline and returns
+a sanitized `504 REQUEST_TIMEOUT` when exceeded. Provider/retrieval timeouts, one
+same-provider retry, bounded excerpts, and the absence of user-supplied URL
+fetching are verified by tests.
+
+Provider credentials are typed as Pydantic `SecretStr` values. Common settings
+representations, JSON serialization, provider errors, readiness errors, and API
+responses must not contain credential values; the regression suite checks these
+paths with dummy secrets. Rotate and revoke any credential exposed during local
+development before configuring a preview or production environment. Never put
+replacement credentials in Git; use local `.env` or the hosting platform's
+secret manager only.
+
 Do not call this a public deployment until the compose build, both probes, the
 offline verification, and the browser/API integration have been rerun from a
 committed release candidate. Tag `v0.1.0` only after that evidence exists.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -24,9 +26,19 @@ from .providers.router import ProviderRouter
 from .workflow import VerificationWorkflow
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 database = Database(settings.database_url)
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
+
+_SAFE_VALIDATION_MESSAGES = frozenset(
+    {
+        "claim contains control characters",
+        "claim must not be blank",
+        "claim exceeds the maximum atomic claim limit",
+        "claim exceeds the maximum retrieval query limit",
+    }
+)
 
 
 @asynccontextmanager
@@ -86,18 +98,48 @@ def readiness() -> ReadinessResponse:
 
 
 @app.post("/api/v1/claims/verify", response_model=VerificationResult)
-def verify_claim(request: VerificationRequest) -> VerificationResult:
+async def verify_claim(request: VerificationRequest) -> VerificationResult:
     try:
-        result = workflow.verify(request)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                workflow.verify,
+                request,
+                timeout_seconds=settings.request_timeout_seconds,
+            ),
+            timeout=settings.request_timeout_seconds + 0.25,
+        )
         database.save(result)
         return result
+    except TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail={"code": "REQUEST_TIMEOUT", "message": "verification timed out safely"},
+        ) from None
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        message = str(exc)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                message
+                if message in _SAFE_VALIDATION_MESSAGES
+                else "verification request is invalid"
+            ),
+        ) from None
     except Exception as exc:
         # Do not expose provider prompts or vendor error payloads.
+        database_error = getattr(exc, "orig", None)
+        diagnostic = getattr(database_error, "diag", None)
+        logger.error(
+            "verification_failed error_type=%s cause_type=%s database_table=%s "
+            "database_constraint=%s",
+            type(exc).__name__,
+            type(exc.__cause__).__name__ if exc.__cause__ is not None else "none",
+            getattr(diagnostic, "table_name", "none"),
+            getattr(diagnostic, "constraint_name", "none"),
+        )
         raise HTTPException(
             status_code=500, detail="verification failed safely; inspect server logs"
-        ) from exc
+        ) from None
 
 
 @app.get("/api/v1/runs/{run_id}", response_model=VerificationResult)

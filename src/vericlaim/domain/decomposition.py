@@ -6,7 +6,7 @@ from .analysis import analyze_claim
 from .models import AtomicClaim, Claim
 
 
-def decompose_claim(claim: Claim) -> list[AtomicClaim]:
+def decompose_claim(claim: Claim, *, max_atomic_claims: int | None = None) -> list[AtomicClaim]:
     # Split only on explicit conjunctions. The original wording, including
     # negation and quantifiers, is retained in each atomic statement.
     pieces = [
@@ -18,6 +18,8 @@ def decompose_claim(claim: Claim) -> list[AtomicClaim]:
     pieces = [piece for piece in pieces if piece]
     if not pieces:
         pieces = [claim.normalized_text]
+    if max_atomic_claims is not None and len(pieces) > max_atomic_claims:
+        raise ValueError("claim exceeds the maximum atomic claim limit")
     return [
         AtomicClaim(
             atomic_id=f"C{index}",
