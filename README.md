@@ -13,9 +13,26 @@ VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learni
 - OpenAlex and Crossref normalized source adapters with explicit HTTP timeouts and metadata-versus-abstract evidence levels. arXiv is an interface placeholder until its response parsing contract is added.
 - Minimal Next.js UI with Overview-style result, evidence, sources, conditions, limitations, and run metadata.
 - Server-side request bounds for claim size, atomic claims, retrieval queries, evidence candidates, and provider calls.
-- Evaluation fixtures/metrics for a future SciFact adapter. No benchmark result is claimed.
+- A bounded SciFact evaluation path with a local, hash-validated manifest,
+  deterministic closed-corpus BM25 retrieval, offline fixture execution, and
+  persisted run artifacts.
 
 Supported verdicts are `SUPPORTED`, `REFUTED`, `MIXED`, `INSUFFICIENT_EVIDENCE`, and `NON_VERIFIABLE`. Confidence means confidence in the verdict given the evidence retrieved by this run, not the probability that the claim is objectively true. Production confidence is currently a deterministic evidence-rule heuristic (including the explicit `MIXED` heuristic value 0.65); it is not calibrated probability.
+
+Current evidence boundaries:
+
+- **IMPLEMENTED / REPRODUCIBLE:** deterministic/offline fixture mode; bounded
+  SciFact evaluation; manifest and hash verification; offline architecture
+  comparison; provider-isolation tooling; evidence provenance; deterministic
+  verdict validation; and persisted run/evidence trace.
+- **PARTIAL / LIMITED:** small bounded benchmark profiles; live-provider
+  availability and quota constraints; incomplete paired live-isolation results;
+  uncalibrated heuristic confidence where applicable; and source-adapter
+  limitations.
+- **NOT ESTABLISHED:** universal factual correctness; a production SLA;
+  benchmark superiority from incomplete live runs; calibrated probability of
+  truth; unrestricted web fact checking; autonomous browsing; or
+  production-grade multi-tenant security.
 
 ## Architecture
 
@@ -61,7 +78,7 @@ Open `http://localhost:3000`. The API is at `http://localhost:8000`.
 
 ## Evaluation
 
-The repository includes a reproducible, bounded SciFact evaluation under `evals/scifact`. It uses the official AllenAI release, a hash-validated local manifest, deterministic closed-corpus BM25 retrieval, and four primary architectures: `A_SINGLE_LLM`, `B_RETRIEVAL_JUDGE`, `C_SUPPORT_COUNTER`, and `D_FULL_VERICLAIM`. A follow-up isolation family (`D1_AUDITOR`, `D2_CRITIC`, `D3_AUDITOR_CRITIC`, and `D4_CONDITIONAL_CRITIC`) separates assurance mechanisms without adding them to the default critical path. Live evaluation uses fixed Groq `openai/gpt-oss-20b` and Gemini `gemini-flash-lite-latest` configurations when explicitly requested; the isolation runner can use one explicitly selected available provider for all stages; OpenRouter is excluded.
+The repository includes a reproducible, bounded SciFact evaluation path under `evals/scifact`. The checked-in `evals/fixtures/scifact/` snapshot is a small deterministic fixture with a hash-validated manifest for offline CI; `scripts/prepare_scifact.py` can prepare the official AllenAI snapshot under ignored `evals/data/scifact/` for an explicitly reviewed run. The protocol uses deterministic closed-corpus BM25 retrieval and four primary architectures: `A_SINGLE_LLM`, `B_RETRIEVAL_JUDGE`, `C_SUPPORT_COUNTER`, and `D_FULL_VERICLAIM`. A follow-up isolation family (`D1_AUDITOR`, `D2_CRITIC`, `D3_AUDITOR_CRITIC`, and `D4_CONDITIONAL_CRITIC`) separates assurance mechanisms without adding them to the default critical path. Live evaluation uses fixed Groq `openai/gpt-oss-20b` and Gemini `gemini-flash-lite-latest` configurations when explicitly requested; the isolation runner can use one explicitly selected available provider for all stages; OpenRouter is excluded. No incomplete live run is promoted as a benchmark conclusion.
 
 Prepare and validate the pinned local snapshot:
 
@@ -141,8 +158,8 @@ npm run typecheck
 npm run build
 ```
 
-Normal tests make no external LLM or retrieval calls, even when a developer's ignored `.env` contains enabled providers. Real-provider tests require `RUN_LIVE_PROVIDER_TESTS=true` and are never required in CI. Run a minimal provider pass with `python scripts/smoke_providers.py --provider all`; it prints only provider/model/status/usage metadata. Run one live persisted verification with `python scripts/smoke_verification.py --preset english` or `--preset thai`; it prints counts, safe source domains/DOIs, provider/model usage, and fallback breadcrumbs, never response bodies or credentials. For deployment smoke checks, start the API and request both `/health` and `/ready`; neither endpoint performs inference. Evaluation data is fixture-only until a dataset manifest and reproducible run are supplied.
+Normal tests make no external LLM or retrieval calls, even when a developer's ignored `.env` contains enabled providers. Real-provider tests require `RUN_LIVE_PROVIDER_TESTS=true` and are never required in CI. Run a minimal provider pass with `python scripts/smoke_providers.py --provider all`; it prints only provider/model/status/usage metadata. Run one live persisted verification with `python scripts/smoke_verification.py --preset english` or `--preset thai`; it prints counts, safe source domains/DOIs, provider/model usage, and fallback breadcrumbs, never response bodies or credentials. For deployment smoke checks, start the API and request both `/health` and `/ready`; neither endpoint performs inference. The checked-in SciFact fixture and hash-validated manifest support reproducible offline evaluation. Official dataset preparation and live-provider evaluation are explicit opt-ins, and live results are not comparable or promotable unless the fixed-provider, complete-pair requirements in [docs/evaluation.md](docs/evaluation.md) are satisfied.
 
 ## Limitations and roadmap
 
-The fixture corpus is not a scientific benchmark and must not be presented as one. The workflow uses deterministic local domain logic to guarantee reproducibility; provider outputs are bounded structured candidates/advisories and cannot invent evidence or override deterministic validation. Retrieval adapters are bounded and not a general web browser. Next steps are a manifest-checked SciFact adapter, richer evidence extraction, cache instrumentation, complete arXiv parsing, async job state if real retrieval latency requires it, and browser-level UI verification.
+The checked-in fixture and small smoke/pilot profiles are bounded evaluation evidence, not universal benchmark claims. The offline reference summary records the deterministic configuration only; its small population reports `CALIBRATION_SAMPLE_TOO_SMALL`, and it does not establish live paired architecture superiority, production promotion, or calibrated confidence. Live paired isolation remains constrained by provider availability and quota; incomplete runs are diagnostic/`BLOCKED`, not superiority evidence. The workflow uses deterministic local domain logic to guarantee reproducibility; provider outputs are bounded structured candidates/advisories and cannot invent evidence or override deterministic validation. Retrieval adapters are bounded and not a general web browser. Next steps are richer evidence extraction, cache instrumentation, complete arXiv parsing, async job state if real retrieval latency requires it, browser-level UI verification, and expanded benchmark profiles.
