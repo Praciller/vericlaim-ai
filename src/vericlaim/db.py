@@ -95,6 +95,10 @@ class ProviderUsageRow(Base):
 
 class Database:
     def __init__(self, url: str) -> None:
+        if url.startswith("postgres://"):
+            url = "postgresql+psycopg://" + url.removeprefix("postgres://")
+        elif url.startswith("postgresql://"):
+            url = "postgresql+psycopg://" + url.removeprefix("postgresql://")
         connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
         self.engine = create_engine(url, connect_args=connect_args)
 

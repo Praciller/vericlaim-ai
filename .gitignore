@@ -40,3 +40,5 @@ evals/results/*
 !evals/results/reference/
 !evals/results/reference/**
 evals/results/local/
+
+.vercel
