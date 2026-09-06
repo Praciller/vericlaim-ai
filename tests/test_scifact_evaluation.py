@@ -41,6 +41,11 @@ from vericlaim.providers.base import ProviderException
 from vericlaim.workflow import MIXED_VERDICT_HEURISTIC_CONFIDENCE
 
 
+def placeholder_key(provider: str) -> str:
+    """Deterministic non-secret stand-in for provider key configuration tests."""
+    return f"unit-test-only-{provider}-key"
+
+
 def _write_fixture(root: Path) -> tuple[Path, Path]:
     data_dir = root / "data"
     data_dir.mkdir()
@@ -529,7 +534,7 @@ def test_cache_context_changes_when_dataset_revision_changes(tmp_path: Path) -> 
 
 def test_fixed_live_model_lock_rejects_substitution(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     settings = Settings(
-        groq_api_key="unit-placeholder",
+        groq_api_key=placeholder_key("groq"),
         groq_enabled=True,
         groq_model=FIXED_MODELS["groq"],
     )
@@ -545,7 +550,7 @@ def test_fixed_live_model_lock_rejects_substitution(monkeypatch) -> None:  # typ
     with pytest.raises(EvaluationError, match="fixed benchmark model mismatch"):
         build_live_providers(
             Settings(
-                groq_api_key="unit-placeholder",
+                groq_api_key=placeholder_key("groq"),
                 groq_enabled=True,
                 groq_model="wrong-model",
             ),
@@ -555,7 +560,7 @@ def test_fixed_live_model_lock_rejects_substitution(monkeypatch) -> None:  # typ
 
 def test_okmd_fixed_live_model_is_explicit_and_locked(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     settings = Settings(
-        okmd_api_key="unit-placeholder",
+        okmd_api_key=placeholder_key("okmd"),
         okmd_enabled=True,
         okmd_model=FIXED_MODELS["okmd"],
     )
@@ -571,7 +576,7 @@ def test_okmd_fixed_live_model_is_explicit_and_locked(monkeypatch) -> None:  # t
     with pytest.raises(EvaluationError, match="fixed benchmark model mismatch"):
         build_live_providers(
             Settings(
-                okmd_api_key="unit-placeholder",
+                okmd_api_key=placeholder_key("okmd"),
                 okmd_enabled=True,
                 okmd_model="wrong-model",
             ),

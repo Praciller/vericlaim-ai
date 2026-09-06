@@ -18,6 +18,11 @@ from vericlaim.providers.base import (
 from vericlaim.providers.router import ProviderRouter
 
 
+def placeholder_key(provider: str) -> str:
+    """Deterministic non-secret stand-in for provider key configuration tests."""
+    return f"unit-test-only-{provider}-key"
+
+
 @dataclass
 class FailingProvider:
     name: str = "groq"
@@ -74,7 +79,7 @@ def test_gemini_invalid_api_key_400_is_authentication(monkeypatch):
         ),
     )
     with pytest.raises(ProviderException) as raised:
-        GeminiProvider("gemini", "gemini-flash-lite-latest", "unit-placeholder").generate(
+        GeminiProvider("gemini", "gemini-flash-lite-latest", placeholder_key("gemini")).generate(
             ProviderRequest("smoke", "Return exactly: OK", max_tokens=16)
         )
     assert raised.value.category == ProviderErrorCategory.AUTHENTICATION
@@ -101,9 +106,9 @@ def test_gemini_success_parses_fixed_actual_model_and_usage(monkeypatch):
             }
         ),
     )
-    response = GeminiProvider("gemini", "gemini-3.5-flash-lite", "unit-placeholder").generate(
-        ProviderRequest("smoke", "Return exactly: OK", max_tokens=16)
-    )
+    response = GeminiProvider(
+        "gemini", "gemini-3.5-flash-lite", placeholder_key("gemini")
+    ).generate(ProviderRequest("smoke", "Return exactly: OK", max_tokens=16))
     assert response.text == "OK"
     assert response.configured_model == "gemini-3.5-flash-lite"
     assert response.actual_model == "gemini-3.5-flash-lite"
@@ -114,11 +119,15 @@ def test_gemini_success_parses_fixed_actual_model_and_usage(monkeypatch):
 
 def test_provider_enable_flag_is_required():
     disabled = ProviderRouter(
-        Settings(mock_provider_enabled=False, groq_api_key="unit-placeholder", groq_enabled=False)
+        Settings(
+            mock_provider_enabled=False, groq_api_key=placeholder_key("groq"), groq_enabled=False
+        )
     )
     assert "groq" not in disabled.providers
     enabled = ProviderRouter(
-        Settings(mock_provider_enabled=False, groq_api_key="unit-placeholder", groq_enabled=True)
+        Settings(
+            mock_provider_enabled=False, groq_api_key=placeholder_key("groq"), groq_enabled=True
+        )
     )
     assert "groq" in enabled.providers
 
@@ -127,14 +136,14 @@ def test_configured_but_disabled_provider_state_has_no_secret():
     router = ProviderRouter(
         Settings(
             mock_provider_enabled=False,
-            cerebras_api_key="unit-placeholder",
+            cerebras_api_key=placeholder_key("cerebras"),
             cerebras_enabled=False,
         )
     )
     status = next(item for item in router.statuses() if item.name == "cerebras")
     assert status.configured is True
     assert status.enabled is False
-    assert "unit-placeholder" not in status.model_dump_json()
+    assert placeholder_key("cerebras") not in status.model_dump_json()
 
 
 def test_provider_fallback_and_usage():
@@ -182,7 +191,9 @@ def test_retry_is_bounded_to_one_same_provider_attempt():
 
 def test_rate_limit_retry_after_is_parsed():
     response = FakeResponse({}, status_code=429, headers={"Retry-After": "3"})
-    provider = OpenAICompatibleProvider("groq", "model", "unit-placeholder", "https://example.test")
+    provider = OpenAICompatibleProvider(
+        "groq", "model", placeholder_key("groq"), "https://example.test"
+    )
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr("vericlaim.providers.base.httpx.post", lambda *args, **kwargs: response)
         with pytest.raises(ProviderException) as raised:
@@ -208,7 +219,7 @@ def test_okmd_adapter_parses_optional_quota(monkeypatch):
         ),
     )
     response = OKMDProvider(
-        "okmd", "deepseek-v4-flash", "unit-placeholder", "https://example.test/api/v1"
+        "okmd", "deepseek-v4-flash", placeholder_key("okmd"), "https://example.test/api/v1"
     ).generate(ProviderRequest("smoke", "Reply OK"))
     assert response.text == "OK"
     assert response.quota_remaining_tokens == 179989
@@ -227,7 +238,7 @@ def test_okmd_embedded_daily_limit_is_quota_exhausted(monkeypatch):
     )
     with pytest.raises(ProviderException) as raised:
         OKMDProvider(
-            "okmd", "deepseek-v4-flash", "unit-placeholder", "https://example.test/api/v1"
+            "okmd", "deepseek-v4-flash", placeholder_key("okmd"), "https://example.test/api/v1"
         ).generate(ProviderRequest("smoke", "Reply OK"))
     assert raised.value.category == ProviderErrorCategory.QUOTA_EXHAUSTED
     assert raised.value.error_code == "403"
@@ -235,7 +246,9 @@ def test_okmd_embedded_daily_limit_is_quota_exhausted(monkeypatch):
 
 def test_thaillm_requires_https():
     with pytest.raises(ValueError, match="HTTPS"):
-        ThaiLLMProvider("thaillm", "model", "unit-placeholder", "http://thaillm.or.th/api/v1")
+        ThaiLLMProvider(
+            "thaillm", "model", placeholder_key("thaillm"), "http://thaillm.or.th/api/v1"
+        )
 
 
 def test_think_extraction_is_conservative():
@@ -260,7 +273,7 @@ def test_empty_http_200_is_not_success(monkeypatch):
     )
     with pytest.raises(ProviderException) as raised:
         OpenAICompatibleProvider(
-            "groq", "model", "unit-placeholder", "https://example.test"
+            "groq", "model", placeholder_key("groq"), "https://example.test"
         ).generate(ProviderRequest("smoke", "Reply"))
     assert raised.value.category == ProviderErrorCategory.MALFORMED_RESPONSE
 
@@ -281,7 +294,7 @@ def test_reasoning_only_openai_response_is_incomplete(monkeypatch):
     )
     with pytest.raises(ProviderException) as raised:
         OpenAICompatibleProvider(
-            "groq", "model", "unit-placeholder", "https://example.test"
+            "groq", "model", placeholder_key("groq"), "https://example.test"
         ).generate(ProviderRequest("smoke", "Reply"))
     assert raised.value.category == ProviderErrorCategory.INCOMPLETE_RESPONSE
 
@@ -313,7 +326,7 @@ def test_thaillm_retries_one_incomplete_response(monkeypatch):
         "vericlaim.providers.base.httpx.post", lambda *args, **kwargs: next(responses)
     )
     response = ThaiLLMProvider(
-        "thaillm", "thai-configured", "unit-placeholder", "https://thaillm.or.th/api/v1"
+        "thaillm", "thai-configured", placeholder_key("thaillm"), "https://thaillm.or.th/api/v1"
     ).generate(ProviderRequest("thai_semantic_review", "ตรวจสอบ", max_tokens=64))
     assert response.text == "ผลลัพธ์"
     assert response.actual_model == "thai-actual"
@@ -321,7 +334,7 @@ def test_thaillm_retries_one_incomplete_response(monkeypatch):
 
 def test_openrouter_records_actual_model():
     provider = OpenAICompatibleProvider(
-        "openrouter", "openrouter/free", "unit-placeholder", "https://example.test"
+        "openrouter", "openrouter/free", placeholder_key("openrouter"), "https://example.test"
     )
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(
