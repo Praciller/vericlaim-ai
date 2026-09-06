@@ -11,6 +11,8 @@ Use **Try deterministic demo** to verify `RAG eliminates hallucinations.` with t
 
 The public artifact is intentionally sanitized: provider usage, agent trace details, assessment rationale, credentials, prompts, raw provider responses, and internal errors are not rendered. The demo is bounded evidence for this fixture workflow, not a claim of universal factual correctness.
 
+![Hosted deterministic run artifact](docs/assets/public-demo/run-artifact.png)
+
 ## What is implemented
 
 - FastAPI API with stable verification run IDs; local development defaults to SQLite, while the hosted demo uses managed PostgreSQL persistence.
