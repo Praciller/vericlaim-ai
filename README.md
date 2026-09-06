@@ -2,9 +2,18 @@
 
 VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learning, software engineering, and scientific-computing claims. It is deliberately not a generic fact-check chatbot: agents have bounded responsibilities, retrieval is source-adapter based, and a verdict is valid only when it can be traced to stored evidence and provenance.
 
+## Live deterministic demo
+
+- Web: https://vericlaim-web.vercel.app
+- API: https://vericlaim-api.vercel.app
+
+Use **Try deterministic demo** to verify `RAG eliminates hallucinations.` with the checked-in fixture path. The hosted demo keeps external provider credentials disabled, so this flow does not consume live-provider quota. After a run completes, **Open shareable run artifact** opens `/runs/<run_id>` and reloads the persisted verdict, evidence, source provenance, conditions, limitations, and evidence graph without rerunning verification or retrieval.
+
+The public artifact is intentionally sanitized: provider usage, agent trace details, assessment rationale, credentials, prompts, raw provider responses, and internal errors are not rendered. The demo is bounded evidence for this fixture workflow, not a claim of universal factual correctness.
+
 ## What is implemented
 
-- FastAPI API with SQLite persistence and stable verification run IDs.
+- FastAPI API with stable verification run IDs; local development defaults to SQLite, while the hosted demo uses managed PostgreSQL persistence.
 - LangGraph workflow: analyze → decompose → plan → support/counter research → audit → judge → critic → deterministic validation.
 - Strong-quantifier detection, compound-claim decomposition, Thai layout-only normalization, and structured Pydantic v2 models.
 - Offline deterministic fixture provider/source for reproducible development and tests.
@@ -59,7 +68,7 @@ See [docs/architecture.md](docs/architecture.md) for responsibilities and persis
 
 ## Setup
 
-Python 3.12+ and Node.js 18+ are required.
+Python 3.12+ and Node.js 20.9+ are required.
 
 ```powershell
 uv venv
