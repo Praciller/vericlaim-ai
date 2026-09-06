@@ -145,3 +145,11 @@ button:disabled { opacity: .5; cursor: wait; }
   button { transition: none; }
   button:hover:not(:disabled) { transform: none; }
 }
+
+
+.artifact-link { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 16px 0 0; }
+.artifact-link a { font-weight: 700; }
+.artifact-link span { color: var(--faint); font-size: .76rem; }
+.artifact-hero h1 { max-width: 980px; overflow-wrap: anywhere; }
+.artifact-graph-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+@media (max-width: 760px) { .artifact-graph-grid { grid-template-columns: 1fr; } }

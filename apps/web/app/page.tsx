@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { FIXTURE_DEMO_CLAIM, runArtifactHref } from "./lib/run-artifact";
 
 type EvidenceStance = "SUPPORTS" | "CONTRADICTS" | "NEUTRAL";
 type Evidence = {
@@ -194,8 +195,8 @@ export default function Home() {
     staleTime: 30_000,
     retry: false,
   });
-  const mutation = useMutation<Result, Error>({
-    mutationFn: async (): Promise<Result> => parseApiResponse<Result>(await fetch(apiEndpoint("/api/v1/claims/verify"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claim }) })),
+  const mutation = useMutation<Result, Error, string>({
+    mutationFn: async (claimToVerify): Promise<Result> => parseApiResponse<Result>(await fetch(apiEndpoint("/api/v1/claims/verify"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claim: claimToVerify }) })),
   });
   const graphQuery = useQuery<EvidenceGraph>({
     queryKey: ["evidence-graph", mutation.data?.run_id],
@@ -217,14 +218,14 @@ export default function Home() {
       <label htmlFor="claim">Technical or scientific claim</label>
       <textarea id="claim" value={claim} onChange={(event) => setClaim(event.target.value)} aria-describedby={claimTooLong ? "claim-error" : "claim-help"} aria-invalid={claimTooLong} placeholder="Example: RAG eliminates hallucinations." />
       {claimTooLong ? <p id="claim-error" className="field-error" role="alert">Keep the claim under 2,000 characters.</p> : <p id="claim-help" className="helper">Preserved as entered; only whitespace is normalized for analysis.</p>}
-      <div className="actions"><button disabled={!claim.trim() || claimTooLong || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Verifying…" : "Verify claim"}</button><span className="action-hint">Offline fixture mode is safe for local demos.</span></div>
-      {mutation.isError ? <div className="error-summary" ref={errorSummaryRef} role="alert" tabIndex={-1} aria-labelledby="error-title"><h2 id="error-title">Verification needs attention</h2><p><strong>{mutation.error instanceof ApiError ? mutation.error.code : "REQUEST_FAILED"}</strong> · {mutation.error.message}</p><button className="secondary-button" type="button" onClick={() => mutation.mutate()}>Try again</button></div> : null}
+      <div className="actions"><button disabled={!claim.trim() || claimTooLong || mutation.isPending} onClick={() => mutation.mutate(claim)}>{mutation.isPending ? "Verifying…" : "Verify claim"}</button><button className="secondary-button" type="button" disabled={mutation.isPending} onClick={() => { setClaim(FIXTURE_DEMO_CLAIM); mutation.mutate(FIXTURE_DEMO_CLAIM); }}>Try deterministic demo</button><span className="action-hint">Fixture demo is deterministic and does not use live provider quota.</span></div>
+      {mutation.isError ? <div className="error-summary" ref={errorSummaryRef} role="alert" tabIndex={-1} aria-labelledby="error-title"><h2 id="error-title">Verification needs attention</h2><p><strong>{mutation.error instanceof ApiError ? mutation.error.code : "REQUEST_FAILED"}</strong> · {mutation.error.message}</p><button className="secondary-button" type="button" onClick={() => mutation.mutate(claim)}>Try again</button></div> : null}
     </section>
     <ProviderPanel providers={providersQuery.data ?? []} isLoading={providersQuery.isLoading} />
     {mutation.data && <section className="panel result-panel" aria-live="polite">
       <div className="result-head"><div><div className="eyebrow">Run {mutation.data.run_id}</div><div className="verdict">{mutation.data.verdict}</div></div><div className="result-meta"><span className={`run-status ${mutation.data.status.toLowerCase()}`}>{mutation.data.status}</span><span>Confidence in this run: {(mutation.data.confidence * 100).toFixed(0)}%</span></div></div>
       {mutation.data.issue_code ? <div className="degraded-banner" role="status"><strong>{mutation.data.issue_code}</strong><span>{issueDescription(mutation.data.issue_code)}</span></div> : null}
-      <p className="lede result-summary">{mutation.data.summary}</p>
+      <p className="lede result-summary">{mutation.data.summary}</p><p className="artifact-link"><a href={runArtifactHref(mutation.data.run_id)}>Open shareable run artifact</a><span>Loads persisted evidence without rerunning verification.</span></p>
       <div className="grid overview-grid"><div className="card"><h3>Atomic claims</h3><ul>{mutation.data.atomic_claims.map((item) => <li key={item.atomic_id}>{item.text}</li>)}</ul></div><div className="card"><h3>Conditions</h3><ul>{(mutation.data.conditions.length ? mutation.data.conditions : ["No additional conditions recorded."]).map((item) => <li key={item}>{item}</li>)}</ul></div><div className="card"><h3>Limitations</h3><ul>{(mutation.data.limitations.length ? mutation.data.limitations : ["No additional limitations recorded."]).map((item) => <li key={item}>{item}</li>)}</ul></div></div>
       {graphQuery.data ? <EvidenceGraphView graph={graphQuery.data} /> : <section className="card graph-loading" aria-live="polite">{graphQuery.isLoading ? "Loading persisted evidence graph…" : "Evidence graph could not be loaded; the run result remains available above."}</section>}
       <div className="grid evidence-grid"><div className="card"><h3>Supporting evidence</h3>{mutation.data.supporting_evidence.length ? mutation.data.supporting_evidence.map((item) => <div className="source" key={item.evidence_id}><p>{item.excerpt}</p><small>{item.provenance} · {item.evidence_level}</small></div>) : <p>No supporting evidence was cited.</p>}</div><div className="card"><h3>Contradicting evidence</h3>{mutation.data.contradicting_evidence.length ? mutation.data.contradicting_evidence.map((item) => <div className="source" key={item.evidence_id}><p>{item.excerpt}</p><small>{item.provenance} · {item.evidence_level}</small></div>) : <p>No contradicting evidence was cited.</p>}</div><div className="card"><h3>Sources</h3>{mutation.data.sources.length ? mutation.data.sources.map((source) => <details className="source" key={source.source_id}><summary>{source.title}</summary><p>{source.abstract ?? "No abstract was stored for this source."}</p><small>{source.source_type} · {source.evidence_level} · {source.provenance}</small>{source.url?.startsWith("http") ? <a href={source.url} target="_blank" rel="noreferrer">Open source</a> : null}</details>) : <p>No source records were retained.</p>}</div></div>

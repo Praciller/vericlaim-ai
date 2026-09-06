@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint app --max-warnings=0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --no-warnings --experimental-strip-types --test app/lib/run-artifact.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
