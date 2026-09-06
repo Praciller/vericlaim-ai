@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
+import socket
 import sys
 import tarfile
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, build_opener
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -18,6 +21,36 @@ from evals.scifact.dataset import (  # noqa: E402
 DATA_URL = "https://scifact.s3-us-west-2.amazonaws.com/release/latest/data.tar.gz"
 EXPECTED_ARCHIVE_SHA256 = "11c621288d41ac144d29b13b0f8503b3820b7d6e8b1f6ff24dff335c196d76be"
 ALLENAI_REPOSITORY_REVISION = "68b98a56d93e0f9da0d2aab4e6c3294699a0f72e"
+ALLOWED_ARCHIVE_HOSTS = frozenset({"scifact.s3-us-west-2.amazonaws.com"})
+
+
+def validate_archive_url(url: str) -> None:
+    """Restrict the download to the pinned HTTPS host on public addresses only."""
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in ALLOWED_ARCHIVE_HOSTS:
+        raise SciFactDataError(f"untrusted dataset archive host: {parsed.hostname!r}")
+    try:
+        addrinfos = socket.getaddrinfo(parsed.hostname, 443, proto=socket.IPPROTO_TCP)
+    except OSError as exc:
+        raise SciFactDataError(f"dataset host resolution failed: {exc}") from exc
+    for info in addrinfos:
+        address = ipaddress.ip_address(info[4][0])
+        if (
+            address.is_private
+            or address.is_loopback
+            or address.is_link_local
+            or address.is_reserved
+            or address.is_multicast
+        ):
+            raise SciFactDataError(f"dataset host resolves to a non-public address: {address}")
+
+
+class ValidatedRedirectHandler(HTTPRedirectHandler):
+    """Re-validate every redirect target against the pinned archive host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
+        validate_archive_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,8 +79,14 @@ def main() -> int:
         if archive.is_file():
             print(f"DATASET_ARCHIVE=EXISTS path={archive}")
         else:
-            with urlopen(DATA_URL, timeout=30) as response:
-                archive.write_bytes(response.read())
+            try:
+                validate_archive_url(DATA_URL)
+                opener = build_opener(ValidatedRedirectHandler)
+                with opener.open(DATA_URL, timeout=30) as response:
+                    archive.write_bytes(response.read())
+            except SciFactDataError as exc:
+                print(f"DATASET_ARCHIVE=FAIL reason={exc}")
+                return 1
             print(f"DATASET_ARCHIVE=DOWNLOADED path={archive}")
         from evals.scifact.dataset import sha256_file
 

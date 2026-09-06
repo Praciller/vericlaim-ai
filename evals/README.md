@@ -22,3 +22,19 @@ The follow-up isolation boundary is `C_SUPPORT_COUNTER`, `D1_AUDITOR`, `D2_CRITI
 For a budget-gated live isolation pass, review `python scripts/eval_agent_isolation.py --profile live-5 --dry-run` first, then run the exact same provider selection. Unknown provider quota is bounded by a hard maximum of 100 calls and a derived token ceiling; provider failures or incomplete paired architecture coverage produce `BLOCKED`, not a recommendation. No live-10 run is automatic.
 
 External datasets and real providers are opt-in and must not run in the normal test suite.
+
+## Offline regression gate
+
+`scripts/eval_regression_gate.py` runs the checked-in fixture benchmark end to end (offline, deterministic, no network or provider calls) and compares claim, evidence, abstention, and call-bound metrics against the checked-in baseline `evals/baselines/scifact-offline-fixture-smoke.json`. A metric drop fails the gate; an improvement passes and is reported; a change to the dataset hashes, cache version, prompt versions, seed, split, or sample size is reported as `BASELINE_DRIFT` and never silently scored; an incomplete or substituted paired run never passes. CI runs the gate after the dry-run plan check, so a verdict or retrieval regression fails the build instead of passing unnoticed.
+
+```powershell
+python scripts/eval_regression_gate.py
+```
+
+Regenerate the baseline only when the metrics are intentionally changed:
+
+```powershell
+python scripts/eval_regression_gate.py --update-baseline
+```
+
+Commit the regenerated baseline separately and record why the metrics changed.

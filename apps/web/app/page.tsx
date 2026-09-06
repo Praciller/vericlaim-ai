@@ -84,6 +84,14 @@ type EvidenceGraph = { run_id: string; nodes: GraphNode[]; edges: GraphEdge[] };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+function apiEndpoint(path: string): string {
+  const url = new URL(path, apiUrl);
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error(`unsupported API protocol: ${url.protocol}`);
+  }
+  return url.toString();
+}
+
 class ApiError extends Error {
   code: string;
 
@@ -182,16 +190,16 @@ export default function Home() {
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const providersQuery = useQuery<ProviderStatus[]>({
     queryKey: ["provider-status"],
-    queryFn: async () => parseApiResponse<ProviderStatus[]>(await fetch(`${apiUrl}/api/v1/providers/status`)),
+    queryFn: async () => parseApiResponse<ProviderStatus[]>(await fetch(apiEndpoint("/api/v1/providers/status"))),
     staleTime: 30_000,
     retry: false,
   });
   const mutation = useMutation<Result, Error>({
-    mutationFn: async (): Promise<Result> => parseApiResponse<Result>(await fetch(`${apiUrl}/api/v1/claims/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claim }) })),
+    mutationFn: async (): Promise<Result> => parseApiResponse<Result>(await fetch(apiEndpoint("/api/v1/claims/verify"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claim }) })),
   });
   const graphQuery = useQuery<EvidenceGraph>({
     queryKey: ["evidence-graph", mutation.data?.run_id],
-    queryFn: async () => parseApiResponse<EvidenceGraph>(await fetch(`${apiUrl}/api/v1/runs/${mutation.data?.run_id}/evidence-graph`)),
+    queryFn: async () => parseApiResponse<EvidenceGraph>(await fetch(apiEndpoint(`/api/v1/runs/${encodeURIComponent(mutation.data?.run_id ?? "")}/evidence-graph`))),
     enabled: Boolean(mutation.data?.run_id),
     staleTime: Infinity,
     retry: false,

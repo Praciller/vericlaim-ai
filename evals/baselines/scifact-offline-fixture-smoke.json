@@ -1,0 +1,62 @@
+{
+  "architectures": {
+    "A_SINGLE_LLM": {
+      "abstention.coverage": 1.0,
+      "claim.accuracy": 0.3333333333333333,
+      "claim.macro_f1": 0.16666666666666666,
+      "efficiency.avg_llm_calls": 1.0
+    },
+    "B_RETRIEVAL_JUDGE": {
+      "abstention.coverage": 1.0,
+      "claim.accuracy": 0.3333333333333333,
+      "claim.macro_f1": 0.16666666666666666,
+      "efficiency.avg_llm_calls": 1.0,
+      "evidence.document_recall_at_k": 1.0,
+      "evidence.evidence_f1": 0.8,
+      "evidence.mrr": 0.6666666666666666
+    },
+    "C_SUPPORT_COUNTER": {
+      "abstention.coverage": 1.0,
+      "claim.accuracy": 0.3333333333333333,
+      "claim.macro_f1": 0.16666666666666666,
+      "efficiency.avg_llm_calls": 2.0,
+      "evidence.document_recall_at_k": 1.0,
+      "evidence.evidence_f1": 0.8,
+      "evidence.mrr": 0.6666666666666666
+    },
+    "D_FULL_VERICLAIM": {
+      "abstention.coverage": 1.0,
+      "claim.accuracy": 0.3333333333333333,
+      "claim.macro_f1": 0.16666666666666666,
+      "efficiency.avg_llm_calls": 4.0,
+      "evidence.document_recall_at_k": 1.0,
+      "evidence.evidence_f1": 0.8,
+      "evidence.mrr": 0.6666666666666666
+    }
+  },
+  "baseline_id": "scifact-offline-fixture-smoke",
+  "description": "Deterministic regression baseline for the checked-in offline SciFact fixture benchmark; regenerate only with scripts/eval_regression_gate.py --update-baseline and record the reason in the commit message.",
+  "environment": {
+    "cache_version": "scifact-structured-cache-v2",
+    "dataset_hashes": {
+      "claims_dev.jsonl": "55b25d3be7ba1b869941bd0e751a417f4016e41b86d69e1cc06e8a1bba4fcaed",
+      "claims_test.jsonl": "6cef9a7adad10066ad35f1556e026292173bccd5a435a6b1ce6ea6797d8d7009",
+      "claims_train.jsonl": "55b25d3be7ba1b869941bd0e751a417f4016e41b86d69e1cc06e8a1bba4fcaed",
+      "corpus.jsonl": "b44b3d031322537f7a83f6a60677f640d4c13845687e6a48672c11286b087a71"
+    },
+    "dataset_revision": "fixture-v1",
+    "prompt_versions": {
+      "auditor": "auditor_v2",
+      "conditional_critic": "conditional_critic_v1",
+      "critic": "critic_v2",
+      "evidence_classifier": "evidence_classifier_v2",
+      "judge": "judge_v2",
+      "judge_recheck": "judge_recheck_v1",
+      "single_llm": "single_llm_v1"
+    },
+    "sample_size": 3,
+    "seed": 42,
+    "split": "dev"
+  },
+  "schema_version": 1
+}

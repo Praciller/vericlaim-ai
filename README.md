@@ -15,7 +15,9 @@ VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learni
 - Server-side request bounds for claim size, atomic claims, retrieval queries, evidence candidates, and provider calls.
 - A bounded SciFact evaluation path with a local, hash-validated manifest,
   deterministic closed-corpus BM25 retrieval, offline fixture execution, and
-  persisted run artifacts.
+  persisted run artifacts. A deterministic regression gate re-runs the offline
+  fixture benchmark in CI and fails on any claim, evidence, or call-bound
+  metric drop against the checked-in baseline.
 
 Supported verdicts are `SUPPORTED`, `REFUTED`, `MIXED`, `INSUFFICIENT_EVIDENCE`, and `NON_VERIFIABLE`. Confidence means confidence in the verdict given the evidence retrieved by this run, not the probability that the claim is objectively true. Production confidence is currently a deterministic evidence-rule heuristic (including the explicit `MIXED` heuristic value 0.65); it is not calibrated probability.
 
@@ -151,6 +153,7 @@ ruff check .
 ruff format --check .
 mypy src
 git diff --check
+python scripts/eval_regression_gate.py
 Set-Location apps/web
 npm install
 npm run lint

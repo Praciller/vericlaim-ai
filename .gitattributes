@@ -1,0 +1,2 @@
+# Hash-validated JSONL datasets must hash identically on every platform.
+*.jsonl text eol=lf
