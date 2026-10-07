@@ -54,7 +54,8 @@ responses must not contain credential values; the regression suite checks these
 paths with dummy secrets. Rotate and revoke any credential exposed during local
 development before configuring a preview or production environment. Never put
 replacement credentials in Git; use local `.env` or the hosting platform's
-secret manager only.
+secret manager only. See the [security policy](../SECURITY.md) for credential
+incident response and agent-environment rules.
 
 Do not call this a public deployment until the compose build, both probes, the
 offline verification, and the browser/API integration have been rerun from a
