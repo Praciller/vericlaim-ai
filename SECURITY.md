@@ -29,6 +29,8 @@ Never put provider credentials in:
 
 Keep committed environment files limited to placeholders such as `.env.example`. Runtime secrets belong in a local secret manager or the hosting platform's encrypted secret store.
 
+GitHub Actions runs redacted Gitleaks checks on pushes, pull requests, and a weekly schedule. The workflow disables PR comments and report uploads. A clean scan cannot establish that a previously exposed credential was revoked; follow the rotation steps above for any historical finding.
+
 ## AI and agent environments
 
 Give Codex and other coding agents only the minimum credentials required for the task. Prefer non-production credentials with narrow provider permissions and quotas. Do not copy production master credentials into an agent environment for source review, tests, or other work that does not need live provider access.
