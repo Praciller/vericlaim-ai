@@ -348,7 +348,10 @@ class GeminiProvider:
         try:
             response = httpx.post(
                 url,
-                params={"key": self.api_key},
+                headers={
+                    "x-goog-api-key": self.api_key,
+                    "Content-Type": "application/json",
+                },
                 json={
                     "contents": [{"parts": [{"text": request.prompt}]}],
                     "generationConfig": {
