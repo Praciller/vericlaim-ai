@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
@@ -14,15 +14,17 @@ from .config import get_settings
 from .db import Database
 from .domain.models import (
     EvidenceGraphResponse,
-    EvidenceListResponse,
     HealthResponse,
     ProviderStatus,
+    PublicEvidenceResponse,
+    PublicRunResponse,
     ReadinessResponse,
     VerificationRequest,
     VerificationResult,
 )
 from .evidence_graph import build_evidence_graph
 from .providers.router import ProviderRouter
+from .rate_limit import InMemoryRateLimiter
 from .workflow import VerificationWorkflow
 
 settings = get_settings()
@@ -30,6 +32,7 @@ logger = logging.getLogger(__name__)
 database = Database(settings.database_url)
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
+verify_rate_limiter = InMemoryRateLimiter(max_requests=settings.max_verify_requests_per_minute)
 
 _SAFE_VALIDATION_MESSAGES = frozenset(
     {
@@ -98,7 +101,16 @@ def readiness() -> ReadinessResponse:
 
 
 @app.post("/api/v1/claims/verify", response_model=VerificationResult)
-async def verify_claim(request: VerificationRequest) -> VerificationResult:
+async def verify_claim(request: VerificationRequest, http_request: Request) -> VerificationResult:
+    # Trust the direct connection peer, not client-supplied forwarding headers.
+    peer = http_request.client.host if http_request.client is not None else "unknown"
+    allowed, retry_after = verify_rate_limiter.allow(peer)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "RATE_LIMITED", "message": "too many verification requests"},
+            headers={"Retry-After": str(retry_after)},
+        )
     try:
         result = await asyncio.wait_for(
             asyncio.to_thread(
@@ -142,20 +154,20 @@ async def verify_claim(request: VerificationRequest) -> VerificationResult:
         ) from None
 
 
-@app.get("/api/v1/runs/{run_id}", response_model=VerificationResult)
-def get_run(run_id: str) -> VerificationResult:
+@app.get("/api/v1/runs/{run_id}", response_model=PublicRunResponse)
+def get_run(run_id: str) -> PublicRunResponse:
     result = database.get(run_id)
     if result is None:
         raise HTTPException(status_code=404, detail="run not found")
-    return result
+    return PublicRunResponse.from_result(result)
 
 
-@app.get("/api/v1/runs/{run_id}/evidence", response_model=EvidenceListResponse)
-def get_evidence(run_id: str) -> EvidenceListResponse:
+@app.get("/api/v1/runs/{run_id}/evidence", response_model=PublicEvidenceResponse)
+def get_evidence(run_id: str) -> PublicEvidenceResponse:
     result = database.get_evidence(run_id)
     if result is None:
         raise HTTPException(status_code=404, detail="run not found")
-    return result
+    return PublicEvidenceResponse(run_id=result.run_id, evidence=result.evidence)
 
 
 @app.get("/api/v1/runs/{run_id}/evidence-graph", response_model=EvidenceGraphResponse)

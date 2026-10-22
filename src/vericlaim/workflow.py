@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -445,64 +446,113 @@ class VerificationWorkflow:
         return state
 
     def _audit(self, state: WorkflowState) -> WorkflowState:
-        def action() -> None:
-            """Audit evidence dimensions independently for relevance, scope, recency, and stance."""
+        """Classify evidence against its claim, never its search-query direction."""
 
-        if state.evidence:
-            classification_advisory = self._record_agent(
+        def action() -> None:
+            """Assess evidence stance and record explicit uncertainty."""
+
+        atomic_texts = {item.atomic_id: item.text for item in state.atomic_claims}
+        source_by_id = {item.source_id: item for item in state.sources}
+        classified: dict[str, EvidenceStance] = {}
+        external = [
+            item
+            for item in state.evidence
+            if source_by_id[item.source_id].source_type != "deterministic_fixture"
+        ]
+        if external:
+            response = self._record_agent(
                 state,
                 "evidence_classifier",
                 "evidence_classification",
                 action,
                 use_provider=True,
                 prompt=(
-                    "Return JSON only as an array with evidence_id and stance for each item. "
-                    "This is advisory; use only IDs supplied below and do not invent sources.\n"
+                    "Classify whether EACH evidence excerpt SUPPORTS, CONTRADICTS, or is "
+                    "NEUTRAL to its exact atomic claim. Return a JSON array with evidence_id "
+                    "and stance for every input, no extra IDs. A retrieval query's direction "
+                    "does not establish stance. Choose NEUTRAL for irrelevant, ambiguous, "
+                    "temporally mismatched, or scope-mismatched evidence. Do not invent sources.\n"
                     + json.dumps(
                         [
-                            {"evidence_id": item.evidence_id, "excerpt": item.excerpt[:500]}
-                            for item in state.evidence
-                        ]
+                            {
+                                "evidence_id": item.evidence_id,
+                                "atomic_claim": atomic_texts.get(item.atomic_id, ""),
+                                "excerpt": item.excerpt[:500],
+                            }
+                            for item in external
+                        ],
+                        ensure_ascii=False,
                     )
                 ),
             )
-            classification = self._validated_advisory(
-                classification_advisory, TypeAdapter(list[EvidenceStanceCandidate])
+            candidate = self._validated_advisory(
+                response, TypeAdapter(list[EvidenceStanceCandidate])
             )
-            if self._has_candidate(classification_advisory) and classification is None:
+            expected_ids = {item.evidence_id for item in external}
+            if (
+                isinstance(candidate, list)
+                and len(candidate) == len(expected_ids)
+                and all(isinstance(item, EvidenceStanceCandidate) for item in candidate)
+                and {item.evidence_id for item in candidate} == expected_ids
+                and len({item.evidence_id for item in candidate}) == len(candidate)
+            ):
+                classified = {item.evidence_id: item.stance for item in candidate}
+            else:
                 state.limitations.append(
-                    "LLM evidence classification candidate failed schema validation"
+                    "External evidence classification was unavailable or incomplete; "
+                    "unassessed evidence is neutral and cannot establish a verdict."
                 )
-        audit_advisory = self._record_agent(
-            state,
-            "evidence_auditor",
-            "evidence_audit",
-            action,
-            use_provider=bool(state.evidence),
-            prompt=(
-                "Return JSON only with an assessments array. Preserve separate dimensions for "
-                "relevance, directness, scope compatibility, and stance. This is advisory and "
-                "must not invent evidence IDs.\n"
-                + json.dumps([item.evidence_id for item in state.evidence])
-            ),
-        )
-        audit_candidate = self._validated_advisory(
-            audit_advisory, TypeAdapter(EvidenceAuditCandidate)
-        )
-        if self._has_candidate(audit_advisory) and audit_candidate is None:
-            state.limitations.append("LLM evidence audit candidate failed schema validation")
-        assert state.claim is not None
-        for evidence in state.evidence:
-            lowered = evidence.excerpt.casefold()
-            contradicting_markers = (
-                "residual",
-                "limitation",
-                "vary",
-                "failure",
-                "not supported",
-                "remain",
+        if state.evidence:
+            audit_advisory = self._record_agent(
+                state,
+                "evidence_auditor",
+                "evidence_audit",
+                action,
+                use_provider=True,
+                prompt=(
+                    "Return JSON only with an assessments array. Preserve separate dimensions "
+                    "for relevance, directness, scope compatibility, and stance. Do not invent "
+                    "evidence IDs.\n" + json.dumps([item.evidence_id for item in state.evidence])
+                ),
             )
-            weaker_markers = (
+            audit_candidate = self._validated_advisory(
+                audit_advisory, TypeAdapter(EvidenceAuditCandidate)
+            )
+            if self._has_candidate(audit_advisory) and audit_candidate is None:
+                state.limitations.append("LLM evidence audit candidate failed schema validation")
+        else:
+            self._record_agent(state, "evidence_auditor", "evidence_audit", action)
+
+        assert state.claim is not None
+        stopwords = {
+            "the",
+            "and",
+            "that",
+            "with",
+            "from",
+            "this",
+            "under",
+            "than",
+            "into",
+            "have",
+            "will",
+            "are",
+            "for",
+            "does",
+            "can",
+            "all",
+            "never",
+            "always",
+            "every",
+            "any",
+            "not",
+            "model",
+            "method",
+        }
+        for evidence in state.evidence:
+            source = source_by_id[evidence.source_id]
+            lowered = evidence.excerpt.casefold()
+            weak_markers = (
                 "reduce",
                 "improve",
                 "under",
@@ -510,32 +560,65 @@ class VerificationWorkflow:
                 "conditional",
                 "can ",
             )
-            if evidence.direction == "counter" or any(
-                word in lowered for word in contradicting_markers
-            ):
-                stance = EvidenceStance.CONTRADICTS
-            elif state.claim.analysis.strong_quantifiers and any(
-                word in lowered for word in weaker_markers
-            ):
-                stance = EvidenceStance.NEUTRAL
+            if source.source_type == "deterministic_fixture":
+                # Bundled synthetic fixtures are a UI smoke test, not external truth.
+                contradicting_markers = (
+                    "residual",
+                    "limitation",
+                    "vary",
+                    "failure",
+                    "not supported",
+                    "remain",
+                )
+                if evidence.direction == "counter" or any(
+                    word in lowered for word in contradicting_markers
+                ):
+                    stance = EvidenceStance.CONTRADICTS
+                elif state.claim.analysis.strong_quantifiers and any(
+                    word in lowered for word in weak_markers
+                ):
+                    stance = EvidenceStance.NEUTRAL
+                else:
+                    stance = EvidenceStance.SUPPORTS
+                rationale = "Synthetic fixture stance; never evidence of external factual truth."
             else:
-                stance = EvidenceStance.SUPPORTS
+                stance = classified.get(evidence.evidence_id, EvidenceStance.NEUTRAL)
+                # A model's stance cannot rescue an excerpt with no shared claim topic.
+                claim_terms = {
+                    word
+                    for word in re.findall(
+                        r"[a-zA-Z0-9]{3,}|[\u0E00-\u0E7F]{2,}",
+                        atomic_texts.get(evidence.atomic_id, "").casefold(),
+                    )
+                    if word not in stopwords
+                }
+                excerpt_terms = set(re.findall(r"[a-zA-Z0-9]{3,}|[\u0E00-\u0E7F]{2,}", lowered))
+                if not claim_terms.intersection(excerpt_terms):
+                    stance = EvidenceStance.NEUTRAL
+                if stance == EvidenceStance.SUPPORTS and (
+                    state.claim.analysis.strong_quantifiers
+                    and any(word in lowered for word in weak_markers)
+                ):
+                    stance = EvidenceStance.NEUTRAL
+                rationale = (
+                    "Claim-aware advisory stance with deterministic topic/scope veto. "
+                    "Other quality dimensions are unknown, not calibrated measurements."
+                )
+            # Scores are explicitly uncalibrated placeholders: do not use them to
+            # infer objective trustworthiness or factual probability.
             state.assessments.append(
                 EvidenceAssessment(
                     evidence_id=evidence.evidence_id,
-                    relevance=0.9,
-                    directness=0.8,
-                    source_quality=0.55,
-                    recency=0.5,
-                    temporal_compatibility=0.8,
-                    scope_compatibility=0.75,
-                    reproducibility_signal=0.7,
+                    relevance=0.0,
+                    directness=0.0,
+                    source_quality=0.0,
+                    recency=0.0,
+                    temporal_compatibility=0.0,
+                    scope_compatibility=0.0,
+                    reproducibility_signal=0.0,
                     stance=stance,
-                    extraction_confidence=0.95,
-                    rationale=(
-                        "Deterministic audit; dimensions remain separately inspectable and weaker "
-                        "evidence is not promoted to support for a strong quantifier."
-                    ),
+                    extraction_confidence=0.0,
+                    rationale=rationale,
                 )
             )
         return state
@@ -549,7 +632,10 @@ class VerificationWorkflow:
             "claim_judge",
             "final_judgment",
             action,
-            use_provider=bool(state.evidence),
+            use_provider=any(
+                item.stance in {EvidenceStance.SUPPORTS, EvidenceStance.CONTRADICTS}
+                for item in state.assessments
+            ),
             prompt=(
                 "Return JSON only matching verdict, confidence, supporting_evidence_ids, "
                 "contradicting_evidence_ids, conditions, missing_evidence, and limitations. "
@@ -635,7 +721,10 @@ class VerificationWorkflow:
             """Independently check scope mismatch, exaggerated language, and citation coverage."""
 
         assert state.verdict is not None
-        if state.verdict.label != VerdictLabel.NON_VERIFIABLE:
+        if state.verdict.label not in {
+            VerdictLabel.NON_VERIFIABLE,
+            VerdictLabel.INSUFFICIENT_EVIDENCE,
+        }:
             critic_advisory = self._record_agent(
                 state,
                 "critic",

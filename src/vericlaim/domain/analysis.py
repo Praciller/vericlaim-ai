@@ -79,7 +79,9 @@ def analyze_claim(text: str) -> ClaimAnalysis:
     entities = [
         word.strip(".,:;()") for word in text.split() if word[:1].isupper() and len(word) > 1
     ]
-    verifiable = not subjective and len(text.split()) >= 2
+    # Thai does not require spaces between words; a short Thai sentence can still be testable.
+    thai_chars = len(THAI_RE.findall(text))
+    verifiable = not subjective and (thai_chars >= 5 if thai_chars else len(text.split()) >= 2)
     return ClaimAnalysis(
         language=language,
         claim_type=claim_type,
