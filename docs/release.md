@@ -28,10 +28,10 @@ inference:
 
 ```powershell
 docker compose build
-docker compose up -d
+docker compose up -d --wait
 Invoke-RestMethod http://localhost:8000/health
 Invoke-RestMethod http://localhost:8000/ready
-Invoke-RestMethod -Method Post http://localhost:8000/api/v1/claims/verify -ContentType 'application/json' -Body '{"claim":"RAG eliminates hallucinations"}'
+python scripts/smoke_public_demo.py
 docker compose down
 ```
 
