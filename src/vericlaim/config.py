@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/vericlaim.db"
     mock_provider_enabled: bool = True
     live_retrieval_enabled: bool = False
+    public_demo_only: bool = False
     default_provider: str = "mock"
     log_level: str = "INFO"
     cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

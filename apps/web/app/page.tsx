@@ -68,6 +68,7 @@ type ProviderStatus = {
   quota_remaining_tokens?: number | null;
   quota_limit_tokens?: number | null;
 };
+type PublicCapabilities = { demo_only: boolean; demo_claim: string };
 type GraphNode = {
   node_id: string;
   kind: "claim" | "atomic_claim" | "evidence" | "source";
@@ -189,6 +190,12 @@ function ProviderPanel({ providers, isLoading }: { providers: ProviderStatus[]; 
 export default function Home() {
   const [claim, setClaim] = useState("");
   const errorSummaryRef = useRef<HTMLDivElement>(null);
+  const capabilitiesQuery = useQuery<PublicCapabilities>({
+    queryKey: ["public-capabilities"],
+    queryFn: async () => parseApiResponse<PublicCapabilities>(await fetch(apiEndpoint("/api/v1/capabilities"))),
+    staleTime: 60_000,
+    retry: false,
+  });
   const providersQuery = useQuery<ProviderStatus[]>({
     queryKey: ["provider-status"],
     queryFn: async () => parseApiResponse<ProviderStatus[]>(await fetch(apiEndpoint("/api/v1/providers/status"))),
@@ -206,6 +213,8 @@ export default function Home() {
     retry: false,
   });
   const claimTooLong = claim.length > 2000;
+  const demoOnly = capabilitiesQuery.data?.demo_only ?? false;
+  const demoClaim = capabilitiesQuery.data?.demo_claim ?? FIXTURE_DEMO_CLAIM;
 
   useEffect(() => {
     if (mutation.isError) errorSummaryRef.current?.focus();
@@ -216,9 +225,9 @@ export default function Home() {
     <section className="panel verify-panel" aria-labelledby="claim-form-title">
       <div className="section-heading"><div><span className="eyebrow">Start a run</span><h2 id="claim-form-title">Claim to verify</h2></div><span className="char-count">{claim.length}/2000</span></div>
       <label htmlFor="claim">Technical or scientific claim</label>
-      <textarea id="claim" value={claim} onChange={(event) => setClaim(event.target.value)} aria-describedby={claimTooLong ? "claim-error" : "claim-help"} aria-invalid={claimTooLong} placeholder="Example: RAG eliminates hallucinations." />
-      {claimTooLong ? <p id="claim-error" className="field-error" role="alert">Keep the claim under 2,000 characters.</p> : <p id="claim-help" className="helper">Preserved as entered; only whitespace is normalized for analysis.</p>}
-      <div className="actions"><button disabled={!claim.trim() || claimTooLong || mutation.isPending} onClick={() => mutation.mutate(claim)}>{mutation.isPending ? "Verifying…" : "Verify claim"}</button><button className="secondary-button" type="button" disabled={mutation.isPending} onClick={() => { setClaim(FIXTURE_DEMO_CLAIM); mutation.mutate(FIXTURE_DEMO_CLAIM); }}>Try deterministic demo</button><span className="action-hint">Fixture demo is deterministic and does not use live provider quota.</span></div>
+      <textarea id="claim" value={claim} disabled={demoOnly} onChange={(event) => setClaim(event.target.value)} aria-describedby={demoOnly ? "claim-demo-help" : claimTooLong ? "claim-error" : "claim-help"} aria-invalid={claimTooLong} placeholder="Example: RAG eliminates hallucinations." />
+      {demoOnly ? <p id="claim-demo-help" className="helper" role="status">Public demo mode accepts only the built-in synthetic example. Do not enter confidential claims.</p> : claimTooLong ? <p id="claim-error" className="field-error" role="alert">Keep the claim under 2,000 characters.</p> : <p id="claim-help" className="helper">Preserved as entered; only whitespace is normalized for analysis.</p>}
+      <div className="actions"><button disabled={demoOnly || !claim.trim() || claimTooLong || mutation.isPending} onClick={() => mutation.mutate(claim)}>{mutation.isPending ? "Verifying…" : "Verify claim"}</button><button className="secondary-button" type="button" disabled={mutation.isPending} onClick={() => { setClaim(demoClaim); mutation.mutate(demoClaim); }}>Try deterministic demo</button><span className="action-hint">Fixture demo is deterministic and does not use live provider quota.</span></div>
       {mutation.isError ? <div className="error-summary" ref={errorSummaryRef} role="alert" tabIndex={-1} aria-labelledby="error-title"><h2 id="error-title">Verification needs attention</h2><p><strong>{mutation.error instanceof ApiError ? mutation.error.code : "REQUEST_FAILED"}</strong> · {mutation.error.message}</p><button className="secondary-button" type="button" onClick={() => mutation.mutate(claim)}>Try again</button></div> : null}
     </section>
     <ProviderPanel providers={providersQuery.data ?? []} isLoading={providersQuery.isLoading} />

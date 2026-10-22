@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 database = Database(settings.database_url, retention_days=settings.run_retention_days)
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
+DEMO_FIXTURE_CLAIM = "RAG eliminates hallucinations."
 verify_rate_limiter = (
     DatabaseRateLimiter(
         database.engine,
@@ -108,8 +109,24 @@ def readiness() -> ReadinessResponse:
     return response
 
 
+@app.get("/api/v1/capabilities")
+def public_capabilities() -> dict[str, bool | str]:
+    """Expose public mode; never expose provider secrets or internal settings."""
+    return {"demo_only": settings.public_demo_only, "demo_claim": DEMO_FIXTURE_CLAIM}
+
+
 @app.post("/api/v1/claims/verify", response_model=VerificationResult)
 async def verify_claim(request: VerificationRequest, http_request: Request) -> VerificationResult:
+    # Apply the public-demo data collection policy before inference, retrieval,
+    # and persistence. This is not a substitute for multi-user authorization.
+    if settings.public_demo_only and request.claim != DEMO_FIXTURE_CLAIM:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "DEMO_ONLY",
+                "message": "This public demo accepts only the built-in deterministic example.",
+            },
+        )
     # Trust the direct connection peer, not client-supplied forwarding headers.
     peer = http_request.client.host if http_request.client is not None else "unknown"
     try:
@@ -174,28 +191,31 @@ async def verify_claim(request: VerificationRequest, http_request: Request) -> V
         ) from None
 
 
+def _public_run_or_404(run_id: str) -> VerificationResult:
+    result = database.get(run_id)
+    if result is None or (
+        settings.public_demo_only and result.original_claim != DEMO_FIXTURE_CLAIM
+    ):
+        # Do not disclose the existence of historical non-demo runs while
+        # operating in publicly accessible demo-only mode.
+        raise HTTPException(status_code=404, detail="run not found")
+    return result
+
+
 @app.get("/api/v1/runs/{run_id}", response_model=PublicRunResponse)
 def get_run(run_id: str) -> PublicRunResponse:
-    result = database.get(run_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="run not found")
-    return PublicRunResponse.from_result(result)
+    return PublicRunResponse.from_result(_public_run_or_404(run_id))
 
 
 @app.get("/api/v1/runs/{run_id}/evidence", response_model=PublicEvidenceResponse)
 def get_evidence(run_id: str) -> PublicEvidenceResponse:
-    result = database.get_evidence(run_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="run not found")
+    result = _public_run_or_404(run_id)
     return PublicEvidenceResponse(run_id=result.run_id, evidence=result.evidence)
 
 
 @app.get("/api/v1/runs/{run_id}/evidence-graph", response_model=EvidenceGraphResponse)
 def get_evidence_graph(run_id: str) -> EvidenceGraphResponse:
-    result = database.get(run_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="run not found")
-    return build_evidence_graph(result)
+    return build_evidence_graph(_public_run_or_404(run_id))
 
 
 @app.get("/api/v1/providers/status", response_model=list[ProviderStatus])
