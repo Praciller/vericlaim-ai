@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,8 +38,21 @@ class Settings(BaseSettings):
     max_provider_calls_per_request: int = Field(default=8, ge=0, le=16)
     request_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
     max_verify_requests_per_minute: int = Field(default=30, ge=1, le=1000)
+    rate_limit_backend: Literal["memory", "database"] = "memory"
+    rate_limit_peer_secret: SecretStr | None = None
     run_retention_days: int = Field(default=30, ge=1, le=365)
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def require_secret_for_database_rate_limit(self) -> Self:
+        if self.rate_limit_backend == "database":
+            secret = secret_value(self.rate_limit_peer_secret)
+            if secret is None or len(secret) < 32:
+                raise ValueError(
+                    "RATE_LIMIT_PEER_SECRET must be at least 32 characters "
+                    "when RATE_LIMIT_BACKEND=database"
+                )
+        return self
 
 
 @lru_cache

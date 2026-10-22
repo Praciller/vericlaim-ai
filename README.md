@@ -176,12 +176,21 @@ Normal tests make no external LLM or retrieval calls, even when a developer's ig
 
 ## Public demo safety and evidence interpretation
 
-- `POST /api/v1/claims/verify` has a configurable **process-local** peer-IP limit
-  (`MAX_VERIFY_REQUESTS_PER_MINUTE=30` by default). A rejected request returns a
-  sanitized HTTP 429 and `Retry-After`. This does **not** protect multiple
-  instances or authenticated accounts; deploy an edge/shared rate limiter,
-  authorization, abuse protection, and retention limits before exposing a
-  publicly accessible production service.
+- `POST /api/v1/claims/verify` has a configurable peer-IP quota
+  (`MAX_VERIFY_REQUESTS_PER_MINUTE=30` by default). Development uses
+  `RATE_LIMIT_BACKEND=memory`: per-process sliding windows, not shared.
+  For multiple API instances, set `RATE_LIMIT_BACKEND=database` and a
+  randomly generated 32+ character `RATE_LIMIT_PEER_SECRET` **only on the
+  server** (for example, generate a secret using `openssl rand -hex 32`).
+  Database mode uses an atomic SQL upsert into the shared PostgreSQL database
+  with one-minute fixed windows, fails closed with 503 when unavailable,
+  returns 429/Retry-After when exhausted, stores only a keyed HMAC of each
+  direct connection peer, and removes stale buckets opportunistically.
+  SQLite file storage works on one host, not across separate machines.
+  All replicas need the same secret, database and synchronized clocks.
+  Behind a reverse proxy the observed peer may be the proxy, so deploy a
+  trusted edge identity/quota mechanism. Do not trust user-supplied forwarding
+  headers. Neither limiter substitutes for user authentication and authorization.
 - Persisted run records are retained for up to `RUN_RETENTION_DAYS` days
   (default **30**, configurable from 1–365). After expiry the public run,
   evidence, and graph endpoints return 404. Expired runs and all corresponding

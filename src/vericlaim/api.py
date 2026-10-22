@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
-from .config import get_settings
+from .config import get_settings, secret_value
 from .db import Database
 from .domain.models import (
     EvidenceGraphResponse,
@@ -24,7 +24,7 @@ from .domain.models import (
 )
 from .evidence_graph import build_evidence_graph
 from .providers.router import ProviderRouter
-from .rate_limit import InMemoryRateLimiter
+from .rate_limit import DatabaseRateLimiter, InMemoryRateLimiter
 from .workflow import VerificationWorkflow
 
 settings = get_settings()
@@ -32,7 +32,15 @@ logger = logging.getLogger(__name__)
 database = Database(settings.database_url, retention_days=settings.run_retention_days)
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
-verify_rate_limiter = InMemoryRateLimiter(max_requests=settings.max_verify_requests_per_minute)
+verify_rate_limiter = (
+    DatabaseRateLimiter(
+        database.engine,
+        max_requests=settings.max_verify_requests_per_minute,
+        peer_secret=secret_value(settings.rate_limit_peer_secret) or "",
+    )
+    if settings.rate_limit_backend == "database"
+    else InMemoryRateLimiter(max_requests=settings.max_verify_requests_per_minute)
+)
 
 _SAFE_VALIDATION_MESSAGES = frozenset(
     {
@@ -104,7 +112,19 @@ def readiness() -> ReadinessResponse:
 async def verify_claim(request: VerificationRequest, http_request: Request) -> VerificationResult:
     # Trust the direct connection peer, not client-supplied forwarding headers.
     peer = http_request.client.host if http_request.client is not None else "unknown"
-    allowed, retry_after = verify_rate_limiter.allow(peer)
+    try:
+        allowed, retry_after = verify_rate_limiter.allow(peer)
+    except Exception as exc:
+        # Fail closed if the shared database is unavailable, without exposing
+        # peer identity or SQL details to clients or logs.
+        logger.error("rate_limiter_unavailable error_type=%s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "RATE_LIMIT_UNAVAILABLE",
+                "message": "verification temporarily unavailable",
+            },
+        ) from None
     if not allowed:
         raise HTTPException(
             status_code=429,
