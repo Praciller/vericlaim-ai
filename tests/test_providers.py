@@ -65,6 +65,38 @@ class FakeResponse:
         return self._payload
 
 
+def test_gemini_sends_api_key_in_header_not_query(monkeypatch):
+    captured = {}
+    api_key = placeholder_key("gemini")
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return FakeResponse(
+            {
+                "modelVersion": "gemini-3.5-flash-lite",
+                "candidates": [
+                    {
+                        "content": {"parts": [{"text": "OK"}]},
+                        "finishReason": "STOP",
+                    }
+                ],
+                "usageMetadata": {},
+            }
+        )
+
+    monkeypatch.setattr("vericlaim.providers.base.httpx.post", fake_post)
+
+    GeminiProvider("gemini", "gemini-3.5-flash-lite", api_key).generate(
+        ProviderRequest("smoke", "Return exactly: OK", max_tokens=16)
+    )
+
+    assert api_key not in captured["url"]
+    assert "params" not in captured["kwargs"]
+    assert captured["kwargs"]["headers"]["x-goog-api-key"] == api_key
+    assert captured["kwargs"]["headers"]["Content-Type"] == "application/json"
+
+
 def test_gemini_invalid_api_key_400_is_authentication(monkeypatch):
     monkeypatch.setattr(
         "vericlaim.providers.base.httpx.post",
