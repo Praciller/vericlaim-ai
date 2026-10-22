@@ -182,6 +182,16 @@ Normal tests make no external LLM or retrieval calls, even when a developer's ig
   instances or authenticated accounts; deploy an edge/shared rate limiter,
   authorization, abuse protection, and retention limits before exposing a
   publicly accessible production service.
+- Persisted run records are retained for up to `RUN_RETENTION_DAYS` days
+  (default **30**, configurable from 1–365). After expiry the public run,
+  evidence, and graph endpoints return 404. Expired runs and all corresponding
+  claims, query plans, evidence, assessments, agent traces, and provider usage
+  are deleted transactionally on application startup, before new saves, and
+  when an expired ID is requested. Cleanup is **opportunistic**, not a strict
+  timed deletion SLA; a dedicated scheduler or provider storage lifecycle is
+  needed where expiry must be enforced promptly at rest. Reducing retention
+  also removes historical demo links. Existing records are subject to this
+  policy at the next app startup.
 - Persisted run URLs are **publicly readable to anyone with the run ID**.
   `GET /api/v1/runs/{run_id}` and its evidence endpoint serve narrow public
   fields without provider usage, internal agent traces, or assessment rationales.
