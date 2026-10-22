@@ -53,36 +53,85 @@ to send private claims or credentials to external domains.
 Backend pytest/Ruff/mypy, frontend test/lint/typecheck/build and SciFact
 offline regression remain independent CI requirements.
 
-## Hosted-demo parity — blocked until hosting ownership is verified
+## Hosted Demo — verified staging, production awaiting database safeguard
 
-As checked on **2026-10-23**, the public preview endpoints returned:
+Verified on **2026-10-23** using the authenticated Vercel account. Both
+production projects are owned by Vercel Hobby team
+`pracillatlove-3370s-projects`, and their existing deployments came from the
+Vercel CLI. They are not currently linked to GitHub auto-deployment:
 
-| URL | Read-only result | Interpretation |
-| --- | --- | --- |
-| `https://vericlaim-web.vercel.app/` | HTTP 200 | A page is served; version not established |
-| `https://vericlaim-api.vercel.app/health` | HTTP 200 | An API instance responds; version not established |
-| `https://vericlaim-api.vercel.app/api/v1/capabilities` | HTTP 404 | The current required demo-only contract is **not** served |
+| Target | URL | Deployed commit | Status |
+| --- | --- | --- | --- |
+| API production | https://vericlaim-api.vercel.app | `e299bd8` | Old build; `/api/v1/capabilities` returned 404 |
+| Web production | https://vericlaim-web.vercel.app | `e299bd8` | Old build; home page returned 200 |
+| Reviewed GitHub main | https://github.com/Praciller/vericlaim-ai | `955c42c` | CI and security checks passed |
 
-The checked GitHub repository has no GitHub deployment records or environments.
-The connected Vercel account's current Git-linked projects do not include
-`Praciller/vericlaim-ai`. This does **not** prove no Vercel deployment exists:
-the hosted URLs are reachable, but their exact owner, commit, configuration,
-and automatic-deploy behavior remain unverified.
+The Vercel production **API** project now contains the following explicit
+configuration keys for the *next* deployment:
+`APP_ENV=production`, `PUBLIC_DEMO_ONLY=true`,
+`MOCK_PROVIDER_ENABLED=true`, `DEFAULT_PROVIDER=mock`,
+and `LIVE_RETRIEVAL_ENABLED=false`. These are non-sensitive mode switches,
+not provider API keys. The existing production PostgreSQL environment
+variables were **not edited**; values were not read or copied. Updating
+environment variables alone does not upgrade a running Vercel deployment.
 
-**Release block:** Do not represent those hosted URLs as the latest security-
-hardened build. Do not deploy to an unverified Vercel project, add credentials,
-or force-promote an unrelated deployment. An authorized owner must first
-identify the API and Web project/team IDs and their Git links, confirm the
-production branch, inspect environment variable **names/configuration only**
-(not secret values), and identify any automatic production deploy on `main`.
+### Isolated Vercel Preview verification
 
-After the owner verifies the target, deploy both Web and API from the
-**same reviewed commit**. Confirm the API is configured for demo-only mode,
-live retrieval/providers are disabled, and CORS plus the Web API base URL
-match the intended HTTPS origins. For hosted persisted runs, ensure the DB
-supports non-ephemeral storage and configure retention. Check the hosting
-platform's ongoing free-tier eligibility and usage limits before choosing any
-managed database; do not assume promotional credits are permanent.
+Both projects were built from the **same main commit** `955c42c` in Vercel
+Preview, leaving production aliases unchanged:
+
+- Web preview:
+  https://vericlaim-web-git-main-pracillatlove-3370s-projects.vercel.app
+- API preview:
+  https://vericlaim-api-git-main-pracillatlove-3370s-projects.vercel.app
+
+The API preview is explicitly **fixture-only** and uses a disposable
+`sqlite:////tmp/vericlaim-preview.db` database, **not** the existing
+production PostgreSQL connection. Web preview points to the API preview URL,
+and API preview CORS permits only the specific Web preview origin. This
+ephemeral preview storage is **not suitable for durable production runs**.
+
+Verified results:
+
+- API `/health`, `/ready`, and `/api/v1/capabilities`: HTTP 200,
+  `demo_only=true`, enabled providers only `mock`.
+- Arbitrary non-fixture claim: HTTP 403 `DEMO_ONLY`.
+- Built-in synthetic fixture: successful POST with persisted Run, Evidence,
+  and Evidence Graph endpoints returning 200.
+- Web browser E2E: 1440px desktop and 390px mobile; manual input disabled,
+  fixture button works, shareable Run/Evidence Graph renders with HTTP 200,
+  and no browser JavaScript errors.
+- Preview API CORS preflight for Web preview: HTTP 200, allow-origin restricted
+  to the tested preview Web domain.
+
+### Production release blocker: preserve or explicitly expire old records
+
+**Do not promote a Preview deployment to Production.** It was built using an
+intentionally temporary, isolated database and preview environment. Its
+passing smoke tests do not establish the safety of existing production data.
+
+The current backend initializes SQL tables and opportunistically **purges
+verification runs older than `RUN_RETENTION_DAYS` (default 30)**, including
+linked claim/evidence/provider trace rows. Switching the production API to
+this version could irreversibly delete legacy rows on startup. A rollback
+cannot restore those rows.
+
+Before switching production, the authorized owner must **verify a restorable
+backup/snapshot of the production PostgreSQL database or explicitly accept
+the documented retention cleanup and possible loss of old Run links**.
+The available Neon connector did not expose the Vercel-linked database
+project, so its backup/PITR status could **not** be verified through this
+connection. Do not infer that the Hobby/Neon plans offer backup guarantees.
+
+Once this prerequisite is satisfied, deploy **both existing Vercel production
+projects from reviewed commit `955c42c` (or a later approved commit)**,
+using the existing production database configuration and fixture-only
+environment values. Check production API readiness and CORS first, then
+Web. Confirm `NEXT_PUBLIC_API_URL` points to the intended production HTTPS
+API origin; never expose private database URLs or tokens to the browser.
+Retain the previous deployment IDs for code rollback, but remember that
+rollback does **not** undo database changes. GitHub Actions is not currently
+configured to deploy to Vercel, and Git auto-deploy must not be assumed.
 
 ### Post-deployment acceptance
 
