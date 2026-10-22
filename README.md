@@ -4,13 +4,17 @@ VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learni
 
 ## Portfolio demo (deterministic fixture only)
 
-**Current deployment verification (2026-10-23):** The hosted web URL and API
-`/health` responded with HTTP 200, but the hosted API returned **404** for
-`/api/v1/capabilities`, an endpoint required by the current fixture-only
-security contract. This means hosted deployment parity with `main` is **not
-established**. Do not submit sensitive claims or present the hosted version as
-the current secured demo until the hosting owner verifies and updates both
-services. No hosted deployment was made as part of this repository work.
+**Vercel release status (2026-10-23):** The production Web and API still
+serve older commit `e299bd8`; the production API's required
+`/api/v1/capabilities` endpoint returned **404**. Both Vercel projects are
+now verified in the connected Hobby team. An isolated **API + Web Preview**
+of reviewed commit `955c42c` passes fixture-only API checks, CORS and
+real desktop/mobile browser E2E (including persisted Run/Evidence Graph).
+
+**Production remains on the old deployment.** Switching the API to the new
+version may purge production Run records older than 30 days, so a verified
+restorable PostgreSQL backup or explicit acceptance of those deletions is
+required before cutover. Do not send sensitive claims to the old public API.
 See [Portfolio demo release checklist](docs/portfolio-demo.md).
 
 
