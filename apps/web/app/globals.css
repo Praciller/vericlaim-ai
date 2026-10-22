@@ -1,6 +1,20 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/*
+ * Small browser reset for the custom CSS design.
+ * VeriClaim does not use Tailwind utility classes. Keep this explicit rather
+ * than installing a CSS utility framework solely for a global reset.
+ */
+*, ::before, ::after { box-sizing: border-box; border: 0 solid #e5e7eb; }
+html { line-height: 1.5; -webkit-text-size-adjust: 100%; tab-size: 4; }
+body, h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd, hr { margin: 0; }
+h1, h2, h3, h4, h5, h6 { font-size: inherit; font-weight: inherit; }
+ol, ul, menu { margin: 0; padding: 0; list-style: none; }
+button, input, optgroup, select, textarea { font: inherit; letter-spacing: inherit; color: inherit; margin: 0; padding: 0; }
+button, select { text-transform: none; }
+button, [type="button"], [type="reset"], [type="submit"] { -webkit-appearance: button; background-color: transparent; background-image: none; }
+a { color: inherit; text-decoration: inherit; }
+img, svg, video, canvas, audio, iframe, embed, object { display: block; vertical-align: middle; }
+img, video { max-width: 100%; height: auto; }
+[hidden] { display: none; }
 
 :root {
   color-scheme: dark;
