@@ -24,7 +24,9 @@ type GraphNode = {
 };
 type EvidenceGraph = { run_id: string; nodes: GraphNode[]; edges: unknown[] };
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Server-side rendering uses an internal service hostname in Docker.
+// Do not expose INTERNAL_API_URL to the browser (no NEXT_PUBLIC_ prefix).
+const apiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 function endpoint(path: string): string {
   const url = new URL(path, apiUrl);

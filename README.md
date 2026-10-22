@@ -2,20 +2,42 @@
 
 VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learning, software engineering, and scientific-computing claims. It is deliberately not a generic fact-check chatbot: agents have bounded responsibilities, retrieval is source-adapter based, and a verdict is valid only when it can be traced to stored evidence and provenance.
 
-## Live deterministic demo
+## Portfolio demo (deterministic fixture only)
+
+**Current deployment verification (2026-10-23):** The hosted web URL and API
+`/health` responded with HTTP 200, but the hosted API returned **404** for
+`/api/v1/capabilities`, an endpoint required by the current fixture-only
+security contract. This means hosted deployment parity with `main` is **not
+established**. Do not submit sensitive claims or present the hosted version as
+the current secured demo until the hosting owner verifies and updates both
+services. No hosted deployment was made as part of this repository work.
+See [Portfolio demo release checklist](docs/portfolio-demo.md).
+
 
 - Web: https://vericlaim-web.vercel.app
 - API: https://vericlaim-api.vercel.app
 
-Use **Try deterministic demo** to verify `RAG eliminates hallucinations.` with the checked-in fixture path. The hosted demo keeps external provider credentials disabled, so this flow does not consume live-provider quota. After a run completes, **Open shareable run artifact** opens `/runs/<run_id>` and reloads the persisted verdict, evidence, source provenance, conditions, limitations, and evidence graph without rerunning verification or retrieval.
+Use **Try deterministic demo** to verify `RAG eliminates hallucinations.` with the checked-in fixture path. The **repository's Compose demo configuration** explicitly disables live retrieval/providers so this flow does not consume live-provider quota. Do not infer deployed environment settings from source configuration until deployment parity is verified. After a run completes, **Open shareable run artifact** opens `/runs/<run_id>` and reloads the persisted verdict, evidence, source provenance, conditions, limitations, and evidence graph without rerunning verification or retrieval.
 
 The public artifact is intentionally sanitized: provider usage, agent trace details, assessment rationale, credentials, prompts, raw provider responses, and internal errors are not rendered. The demo is bounded evidence for this fixture workflow, not a claim of universal factual correctness.
 
 ![Hosted deterministic run artifact](docs/assets/public-demo/run-artifact.png)
 
+The local Compose stack can be checked end-to-end without any external provider
+or paid service:
+
+```powershell
+docker compose up -d --build --wait
+python scripts/smoke_public_demo.py
+docker compose down -v --remove-orphans
+```
+
+CI runs the same fixture-only smoke against running Docker containers in
+addition to unit tests, static checks and Docker image builds.
+
 ## What is implemented
 
-- FastAPI API with stable verification run IDs; local development defaults to SQLite, while the hosted demo uses managed PostgreSQL persistence.
+- FastAPI API with stable verification run IDs; local development defaults to SQLite, and PostgreSQL is supported for durable hosted persistence. The actual hosted database configuration has not yet been verified.
 - LangGraph workflow: analyze → decompose → plan → support/counter research → audit → judge → critic → deterministic validation.
 - Strong-quantifier detection, compound-claim decomposition, Thai layout-only normalization, and structured Pydantic v2 models.
 - Offline deterministic fixture provider/source for reproducible development and tests.

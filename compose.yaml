@@ -32,6 +32,8 @@ services:
     environment:
       HOSTNAME: 0.0.0.0
       PORT: 3000
+      # Only server-rendered Next.js requests use Docker's internal hostname.
+      INTERNAL_API_URL: http://api:8000
     ports:
       - "3000:3000"
     depends_on:
