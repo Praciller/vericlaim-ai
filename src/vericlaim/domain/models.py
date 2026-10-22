@@ -249,6 +249,51 @@ class VerificationResult(BaseModel):
     completed_at: datetime | None = None
 
 
+class PublicRunResponse(BaseModel):
+    """Explicit, minimal shareable result; never includes provider or agent traces."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    original_claim: str
+    normalized_claim: str
+    status: RunStatus
+    verdict: VerdictLabel
+    confidence: float = Field(ge=0, le=1)
+    summary: str
+    issue_code: RunIssueCode | None
+    atomic_claims: list[AtomicClaim]
+    sources: list[Source]
+    supporting_evidence: list[Evidence]
+    contradicting_evidence: list[Evidence]
+    conditions: list[str]
+    limitations: list[str]
+
+    @classmethod
+    def from_result(cls, result: VerificationResult) -> PublicRunResponse:
+        return cls(
+            run_id=result.run_id,
+            original_claim=result.original_claim,
+            normalized_claim=result.normalized_claim,
+            status=result.status,
+            verdict=result.verdict,
+            confidence=result.confidence,
+            summary=result.summary,
+            issue_code=result.issue_code,
+            atomic_claims=result.atomic_claims,
+            sources=result.sources,
+            supporting_evidence=result.supporting_evidence,
+            contradicting_evidence=result.contradicting_evidence,
+            conditions=result.conditions,
+            limitations=result.limitations,
+        )
+
+
+class PublicEvidenceResponse(BaseModel):
+    run_id: str
+    evidence: list[Evidence]
+
+
 class VerificationRequest(BaseModel):
     claim: str = Field(min_length=1, max_length=2000)
 

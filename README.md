@@ -174,6 +174,30 @@ npm run build
 
 Normal tests make no external LLM or retrieval calls, even when a developer's ignored `.env` contains enabled providers. Real-provider tests require `RUN_LIVE_PROVIDER_TESTS=true` and are never required in CI. Run a minimal provider pass with `python scripts/smoke_providers.py --provider all`; it prints only provider/model/status/usage metadata. Run one live persisted verification with `python scripts/smoke_verification.py --preset english` or `--preset thai`; it prints counts, safe source domains/DOIs, provider/model usage, and fallback breadcrumbs, never response bodies or credentials. For deployment smoke checks, start the API and request both `/health` and `/ready`; neither endpoint performs inference. The checked-in SciFact fixture and hash-validated manifest support reproducible offline evaluation. Official dataset preparation and live-provider evaluation are explicit opt-ins, and live results are not comparable or promotable unless the fixed-provider, complete-pair requirements in [docs/evaluation.md](docs/evaluation.md) are satisfied.
 
+## Public demo safety and evidence interpretation
+
+- `POST /api/v1/claims/verify` has a configurable **process-local** peer-IP limit
+  (`MAX_VERIFY_REQUESTS_PER_MINUTE=30` by default). A rejected request returns a
+  sanitized HTTP 429 and `Retry-After`. This does **not** protect multiple
+  instances or authenticated accounts; deploy an edge/shared rate limiter,
+  authorization, abuse protection, and retention limits before exposing a
+  publicly accessible production service.
+- Persisted run URLs are **publicly readable to anyone with the run ID**.
+  `GET /api/v1/runs/{run_id}` and its evidence endpoint serve narrow public
+  fields without provider usage, internal agent traces, or assessment rationales.
+  However they still expose the original user-entered claim and evidence
+  excerpts. Do not submit private/confidential information in a public demo;
+  production multi-user use requires access controls and data retention/deletion.
+  CORS is not authentication.
+- External evidence requires complete claim-aware stance classification;
+  missing/malformed results or unassessable excerpts remain NEUTRAL rather than
+  being treated as support/counter based on search direction. Strong absolute
+  language receives a conservative scope veto. These controls reduce unsupported
+  verdicts but **do not prove factual correctness**.
+- Offline fixture judgments are illustrative and must not be treated as results
+  from real publications. Evidence quality numbers are uncalibrated placeholders,
+  not objective source-reliability scores.
+
 ## Limitations and roadmap
 
 The checked-in fixture and small smoke/pilot profiles are bounded evaluation evidence, not universal benchmark claims. The offline reference summary records the deterministic configuration only; its small population reports `CALIBRATION_SAMPLE_TOO_SMALL`, and it does not establish live paired architecture superiority, production promotion, or calibrated confidence. Live paired isolation remains constrained by provider availability and quota; incomplete runs are diagnostic/`BLOCKED`, not superiority evidence. The workflow uses deterministic local domain logic to guarantee reproducibility; provider outputs are bounded structured candidates/advisories and cannot invent evidence or override deterministic validation. Retrieval adapters are bounded and not a general web browser. Next steps are richer evidence extraction, cache instrumentation, complete arXiv parsing, async job state if real retrieval latency requires it, browser-level UI verification, and expanded benchmark profiles.

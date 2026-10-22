@@ -52,3 +52,7 @@ python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 exclude = "tests"
+
+[[tool.mypy.overrides]]
+module = ["langgraph", "langgraph.*"]
+ignore_missing_imports = true

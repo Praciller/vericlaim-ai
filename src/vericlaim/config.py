@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     max_evidence_candidates_per_request: int = Field(default=32, ge=1, le=64)
     max_provider_calls_per_request: int = Field(default=8, ge=0, le=16)
     request_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+    max_verify_requests_per_minute: int = Field(default=30, ge=1, le=1000)
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
