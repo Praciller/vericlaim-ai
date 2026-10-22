@@ -39,6 +39,16 @@ class VerificationRunRow(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RateLimitBucketRow(Base):
+    """Shared fixed-window quota counter; peer identity is a keyed HMAC digest."""
+
+    __tablename__ = "rate_limit_buckets"
+    __table_args__ = (PrimaryKeyConstraint("peer_hash", "window_index"),)
+    peer_hash: Mapped[str] = mapped_column(String(64))
+    window_index: Mapped[int] = mapped_column()
+    hits: Mapped[int] = mapped_column()
+
+
 class ClaimRow(Base):
     __tablename__ = "claims"
     claim_id: Mapped[str] = mapped_column(String(64), primary_key=True)
