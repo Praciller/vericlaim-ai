@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import DateTime, ForeignKey, PrimaryKeyConstraint, String, Text, create_engine, text
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    PrimaryKeyConstraint,
+    String,
+    Text,
+    create_engine,
+    delete,
+    func,
+    select,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from .domain.models import EvidenceListResponse, VerificationResult
@@ -94,7 +106,19 @@ class ProviderUsageRow(Base):
 
 
 class Database:
-    def __init__(self, url: str) -> None:
+    """Persisted runs with a bounded, configurable share-link/data lifetime."""
+
+    def __init__(
+        self,
+        url: str,
+        *,
+        retention_days: int = 30,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        if retention_days < 1:
+            raise ValueError("retention_days must be positive")
+        self.retention_days = retention_days
+        self.clock = clock
         if url.startswith("postgres://"):
             url = "postgresql+psycopg://" + url.removeprefix("postgres://")
         elif url.startswith("postgresql://"):
@@ -103,9 +127,56 @@ class Database:
         self.engine = create_engine(url, connect_args=connect_args)
 
     def init(self) -> None:
-        if self.engine.url.database and self.engine.url.database != ":memory:":
+        if (
+            self.engine.dialect.name == "sqlite"
+            and self.engine.url.database
+            and self.engine.url.database != ":memory:"
+        ):
             Path(self.engine.url.database).parent.mkdir(parents=True, exist_ok=True)
         Base.metadata.create_all(self.engine)
+        self.purge_expired()
+
+    def _cutoff(self) -> datetime:
+        now = self.clock()
+        if now.tzinfo is None:
+            raise ValueError("retention clock must be timezone-aware")
+        return now.astimezone(UTC) - timedelta(days=self.retention_days)
+
+    def purge_expired(self) -> int:
+        """Delete old runs and every linked record in one transaction.
+
+        Called on startup, on writes and upon reads of expired run IDs. This
+        is opportunistic housekeeping, not a continuously running scheduler.
+        """
+        cutoff = self._cutoff()
+        with Session(self.engine) as session:
+            count = session.scalar(
+                select(func.count())
+                .select_from(VerificationRunRow)
+                .where(VerificationRunRow.created_at < cutoff)
+            )
+            if not count:
+                return 0
+            expired_ids = select(VerificationRunRow.run_id).where(
+                VerificationRunRow.created_at < cutoff
+            )
+            for model in (
+                ClaimRow,
+                AtomicClaimRow,
+                SearchQueryRow,
+                SourceRow,
+                EvidenceRow,
+                EvidenceAssessmentRow,
+                VerdictRow,
+                AgentRunRow,
+                ProviderUsageRow,
+            ):
+                session.execute(delete(model).where(model.run_id.in_(expired_ids)))
+            session.execute(
+                delete(VerificationRunRow).where(VerificationRunRow.created_at < cutoff)
+            )
+            session.commit()
+        return int(count)
 
     def check(self) -> bool:
         """Run a bounded database liveness check for deployment readiness."""
@@ -114,6 +185,7 @@ class Database:
         return True
 
     def save(self, result: VerificationResult) -> None:
+        self.purge_expired()
         payload = result.model_dump(mode="json")
         with Session(self.engine) as session:
             session.add(
@@ -205,7 +277,17 @@ class Database:
     def get(self, run_id: str) -> VerificationResult | None:
         with Session(self.engine) as session:
             row = session.get(VerificationRunRow, run_id)
-            return VerificationResult.model_validate(json.loads(row.result_json)) if row else None
+            if row is None:
+                return None
+            created_at = row.created_at
+            if created_at.tzinfo is None:
+                # SQLite's DateTime adapter drops UTC tzinfo on reads.
+                created_at = created_at.replace(tzinfo=UTC)
+            if created_at >= self._cutoff():
+                return VerificationResult.model_validate(json.loads(row.result_json))
+        # Fail closed on reads even if periodic cleanup did not run.
+        self.purge_expired()
+        return None
 
     def get_evidence(self, run_id: str) -> EvidenceListResponse | None:
         result = self.get(run_id)

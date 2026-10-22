@@ -29,7 +29,7 @@ from .workflow import VerificationWorkflow
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
-database = Database(settings.database_url)
+database = Database(settings.database_url, retention_days=settings.run_retention_days)
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
 verify_rate_limiter = InMemoryRateLimiter(max_requests=settings.max_verify_requests_per_minute)
