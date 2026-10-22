@@ -176,6 +176,19 @@ Normal tests make no external LLM or retrieval calls, even when a developer's ig
 
 ## Public demo safety and evidence interpretation
 
+- The checked-in `compose.yaml` enables `PUBLIC_DEMO_ONLY=true` on the API.
+  This **anonymous portfolio/demo** mode accepts only the built-in synthetic
+  claim (`RAG eliminates hallucinations.`) and returns HTTP 403 `DEMO_ONLY`
+  for any other claim, before retrieval, inference or persistence.
+  `GET /api/v1/capabilities` advertises this restriction so the web UI
+  disables arbitrary text entry while keeping the fixture demo working.
+  Non-fixture records left from prior operation return 404 from the run,
+  evidence and graph endpoints while demo-only mode is active.
+  Set `PUBLIC_DEMO_ONLY=false` for a trusted local/internal installation;
+  doing so enables arbitrary claim entry and exposes existing unexpired
+  shareable artifacts. Do not accept sensitive data without real login,
+  access checks and edge abuse controls. Demo-only is **not authentication**.
+
 - `POST /api/v1/claims/verify` has a configurable peer-IP quota
   (`MAX_VERIFY_REQUESTS_PER_MINUTE=30` by default). Development uses
   `RATE_LIMIT_BACKEND=memory`: per-process sliding windows, not shared.
