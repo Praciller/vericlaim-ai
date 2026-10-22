@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     mock_provider_enabled: bool = True
     live_retrieval_enabled: bool = False
     public_demo_only: bool = False
+    api_access_token: SecretStr | None = None
     default_provider: str = "mock"
     log_level: str = "INFO"
     cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
@@ -46,6 +47,31 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_secret_for_database_rate_limit(self) -> Self:
+        token = secret_value(self.api_access_token)
+        if token is not None and len(token) < 32:
+            raise ValueError("API_ACCESS_TOKEN must be at least 32 characters")
+        if self.app_env.lower() in ("production", "staging"):
+            if not self.public_demo_only and token is None:
+                raise ValueError(
+                    "Production non-demo API requires API_ACCESS_TOKEN "
+                    "(32+ characters); or enable PUBLIC_DEMO_ONLY"
+                )
+        if self.public_demo_only:
+            if (
+                not self.mock_provider_enabled
+                or self.default_provider != "mock"
+                or self.live_retrieval_enabled
+                or self.gemini_enabled
+                or self.cerebras_enabled
+                or self.groq_enabled
+                or self.openrouter_enabled
+                or self.okmd_enabled
+                or self.thaillm_enabled
+            ):
+                raise ValueError(
+                    "Public demo requires mock provider only, with live providers "
+                    "and retrieval disabled"
+                )
         if self.rate_limit_backend == "database":
             secret = secret_value(self.rate_limit_peer_secret)
             if secret is None or len(secret) < 32:

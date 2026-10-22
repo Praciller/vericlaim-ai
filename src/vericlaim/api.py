@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
@@ -115,7 +116,33 @@ def public_capabilities() -> dict[str, bool | str]:
     return {"demo_only": settings.public_demo_only, "demo_claim": DEMO_FIXTURE_CLAIM}
 
 
-@app.post("/api/v1/claims/verify", response_model=VerificationResult)
+def require_private_access(request: Request) -> None:
+    """Protect non-demo endpoints using a server-only bearer key, when set.
+
+    Development without a token remains local-only. Production non-demo
+    startup is rejected by Settings unless a sufficiently strong key exists.
+    """
+    if settings.public_demo_only:
+        return
+    expected = secret_value(settings.api_access_token)
+    if expected is None:
+        return
+    header = request.headers.get("authorization", "")
+    prefix = "Bearer "
+    supplied = header[len(prefix) :] if header.startswith(prefix) else ""
+    if not hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "UNAUTHORIZED", "message": "valid bearer token required"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@app.post(
+    "/api/v1/claims/verify",
+    response_model=VerificationResult,
+    dependencies=[Depends(require_private_access)],
+)
 async def verify_claim(request: VerificationRequest, http_request: Request) -> VerificationResult:
     # Apply the public-demo data collection policy before inference, retrieval,
     # and persistence. This is not a substitute for multi-user authorization.
@@ -202,18 +229,30 @@ def _public_run_or_404(run_id: str) -> VerificationResult:
     return result
 
 
-@app.get("/api/v1/runs/{run_id}", response_model=PublicRunResponse)
+@app.get(
+    "/api/v1/runs/{run_id}",
+    response_model=PublicRunResponse,
+    dependencies=[Depends(require_private_access)],
+)
 def get_run(run_id: str) -> PublicRunResponse:
     return PublicRunResponse.from_result(_public_run_or_404(run_id))
 
 
-@app.get("/api/v1/runs/{run_id}/evidence", response_model=PublicEvidenceResponse)
+@app.get(
+    "/api/v1/runs/{run_id}/evidence",
+    response_model=PublicEvidenceResponse,
+    dependencies=[Depends(require_private_access)],
+)
 def get_evidence(run_id: str) -> PublicEvidenceResponse:
     result = _public_run_or_404(run_id)
     return PublicEvidenceResponse(run_id=result.run_id, evidence=result.evidence)
 
 
-@app.get("/api/v1/runs/{run_id}/evidence-graph", response_model=EvidenceGraphResponse)
+@app.get(
+    "/api/v1/runs/{run_id}/evidence-graph",
+    response_model=EvidenceGraphResponse,
+    dependencies=[Depends(require_private_access)],
+)
 def get_evidence_graph(run_id: str) -> EvidenceGraphResponse:
     return build_evidence_graph(_public_run_or_404(run_id))
 

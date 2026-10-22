@@ -174,6 +174,30 @@ npm run build
 
 Normal tests make no external LLM or retrieval calls, even when a developer's ignored `.env` contains enabled providers. Real-provider tests require `RUN_LIVE_PROVIDER_TESTS=true` and are never required in CI. Run a minimal provider pass with `python scripts/smoke_providers.py --provider all`; it prints only provider/model/status/usage metadata. Run one live persisted verification with `python scripts/smoke_verification.py --preset english` or `--preset thai`; it prints counts, safe source domains/DOIs, provider/model usage, and fallback breadcrumbs, never response bodies or credentials. For deployment smoke checks, start the API and request both `/health` and `/ready`; neither endpoint performs inference. The checked-in SciFact fixture and hash-validated manifest support reproducible offline evaluation. Official dataset preparation and live-provider evaluation are explicit opt-ins, and live results are not comparable or promotable unless the fixed-provider, complete-pair requirements in [docs/evaluation.md](docs/evaluation.md) are satisfied.
 
+## Private API deployment guard
+
+- For `APP_ENV=production` or `staging`, the API **refuses to start** unless
+  `PUBLIC_DEMO_ONLY=true` or a strong server-side `API_ACCESS_TOKEN` (32+
+  characters) has been configured. A production typo or missing token therefore
+  cannot silently expose arbitrary claim submission and stored artifacts.
+- When `PUBLIC_DEMO_ONLY=false` and `API_ACCESS_TOKEN` is set, all verify,
+  run, evidence and evidence-graph endpoints require `Authorization: Bearer`
+  with that token. Unauthorized requests receive sanitized 401 responses.
+  Generate a token using `openssl rand -hex 32`, keep it in a server-only
+  secret manager, use HTTPS, and never expose it through `NEXT_PUBLIC_`
+  variables, client-side JavaScript, URLs or browser storage.
+- Anonymous fixture demos remain available without a token. Demo-only mode
+  refuses to start if live retrieval or non-mock providers are enabled,
+  avoiding accidental external calls or provider cost.
+- This shared Bearer token is suitable only for **trusted internal automation**.
+  It provides no individual user identities, role permissions, per-user run
+  ownership, token rotation protocol or browser sign-in. The existing Web
+  interface intentionally does **not** carry the token; use a trusted
+  server/CLI client for private mode until a real identity-provider login
+  and authorized BFF/session-based web flow have been implemented.
+- Local development (`APP_ENV=development`) without a token retains the
+  original no-login workflow. Never expose that mode publicly.
+
 ## Public demo safety and evidence interpretation
 
 - The checked-in `compose.yaml` enables `PUBLIC_DEMO_ONLY=true` on the API.
