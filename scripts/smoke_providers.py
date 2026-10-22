@@ -30,7 +30,7 @@ def model_check(name: str, provider: Any) -> str:
         if name == "gemini":
             response = httpx.get(
                 "https://generativelanguage.googleapis.com/v1beta/models",
-                params={"key": provider.api_key},
+                headers={"x-goog-api-key": provider.api_key},
                 timeout=10,
             )
             payload: Any = response.json()
