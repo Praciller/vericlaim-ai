@@ -1,7 +1,8 @@
 """Read-only, aggregate-only retention preflight for an isolated LOCAL database.
 
-Never connects to a remote production database. Does not initialize schemas,
-purge data, reveal row contents, or accept credentials in CLI arguments.
+Rejects remote database URLs; the operator must also avoid local tunnels
+forwarding to production. Does not initialize schemas, purge data, reveal
+row contents, or accept credentials in CLI arguments.
 """
 
 from __future__ import annotations
@@ -52,6 +53,11 @@ def validate_local_url(value: str) -> URL:
         url = make_url(value)
     except ArgumentError as exc:
         raise ValueError("Invalid local database URL") from exc
+    # DB drivers can honor URL query parameters such as host/hostaddr/service
+    # that override the apparent host. SQLite URI parameters can also redirect
+    # the file target. No query arguments are required for this operator tool.
+    if url.query:
+        raise ValueError("Database URL query parameters are not supported")
     backend = url.get_backend_name()
     if backend == "postgresql":
         if url.host not in LOCAL_PG_HOSTS or not url.database:
@@ -59,11 +65,22 @@ def validate_local_url(value: str) -> URL:
     elif backend == "sqlite":
         if url.database in (None, "", ":memory:"):
             raise ValueError("Supply an existing local SQLite database file")
-        if not Path(url.database).is_file():
-            raise ValueError("Local SQLite database file does not exist")
+        if url.database.startswith(("//", "\\\\")):
+            raise ValueError("Network/UNC SQLite paths are forbidden")
+        resolved = Path(url.database).resolve()
+        if str(resolved).startswith(("//", "\\\\")) or not resolved.is_file():
+            raise ValueError("SQLite must be an existing local file")
     else:
         raise ValueError("Only local SQLite or loopback PostgreSQL are supported")
     return url
+
+
+def create_local_engine(url: URL) -> Engine:
+    """Pin libpq's actual destination IP, independent of PGHOSTADDR env vars."""
+    if url.get_backend_name() == "postgresql":
+        loopback = "127.0.0.1" if url.host == "localhost" else url.host
+        return create_engine(url, connect_args={"hostaddr": loopback})
+    return create_engine(url)
 
 
 def inspect_retention(
@@ -130,7 +147,7 @@ def main() -> int:
         url = validate_local_url(os.getenv("RETENTION_PREFLIGHT_DATABASE_URL", ""))
         if not 1 <= args.days <= 365:
             raise ValueError("Retention days must be between 1 and 365")
-        engine = create_engine(url)
+        engine = create_local_engine(url)
         try:
             result = inspect_retention(engine, now=datetime.now(UTC), retention_days=args.days)
         finally:
