@@ -143,9 +143,14 @@ explicitly approves both the recovery arrangement and data deletion.
 Before any future retention cleanup approval, perform an aggregate-only preflight
 on a **disposable local restored database**, never directly against the public
 Production endpoint. The `scripts/retention_impact.py` command refuses remote
-PostgreSQL hosts, missing SQLite files, and nonlocal database types; it does not
+PostgreSQL hosts, missing SQLite files, URL query overrides (including
+`hostaddr` and `service`), UNC/network SQLite paths, and nonlocal database
+types. The PostgreSQL driver is explicitly pinned to a loopback IP even
+when libpq environment variables suggest otherwise. The command does not
 initialize schemas or execute DML. Both PostgreSQL and SQLite connections
-enforce read-only query mode during inspection.
+enforce read-only query mode during inspection. **Loopback can still be
+forwarded by an operator-configured tunnel**: verify that the endpoint is
+a disposable local database, never a Production database proxy.
 
 Supply credentials for the **disposable local restore only**, never Neon
 or Vercel. Prompt interactively rather than typing a password into a command
