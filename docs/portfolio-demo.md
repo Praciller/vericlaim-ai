@@ -147,16 +147,22 @@ PostgreSQL hosts, missing SQLite files, and nonlocal database types; it does not
 initialize schemas or execute DML. Both PostgreSQL and SQLite connections
 enforce read-only query mode during inspection.
 
-Supply the connection via a temporary environment variable rather than a
-command-line argument (which can persist in shell history). Use the private
-credentials of the *local restore only*, not a Neon or Vercel secret. Example
-for an operator-owned, already restored local PostgreSQL instance listening on
-loopback (the values shown are placeholders):
+Supply credentials for the **disposable local restore only**, never Neon
+or Vercel. Prompt interactively rather than typing a password into a command
+or shell history, and pass the URL only through a temporary environment
+variable. Example for a local PostgreSQL copy listening on loopback:
 
 ```powershell
-$env:RETENTION_PREFLIGHT_DATABASE_URL = 'postgresql+psycopg://local_user:LOCAL_ONLY_PASSWORD@127.0.0.1:5432/vericlaim_ci'
-uv run --extra dev python scripts/retention_impact.py --days 30
-Remove-Item Env:RETENTION_PREFLIGHT_DATABASE_URL
+$localCredential = Get-Credential -Message 'Disposable local PostgreSQL only'
+$localUser = [uri]::EscapeDataString($localCredential.UserName)
+$localPassword = [uri]::EscapeDataString($localCredential.GetNetworkCredential().Password)
+try {
+  $env:RETENTION_PREFLIGHT_DATABASE_URL = "postgresql+psycopg://${localUser}:${localPassword}@127.0.0.1:5432/vericlaim_ci"
+  uv run --extra dev python scripts/retention_impact.py --days 30
+} finally {
+  Remove-Item Env:RETENTION_PREFLIGHT_DATABASE_URL -ErrorAction SilentlyContinue
+  Remove-Variable localPassword, localCredential -ErrorAction SilentlyContinue
+}
 ```
 
 The tool returns only table counts and a UTC cutoff; it never displays run
