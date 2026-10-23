@@ -84,14 +84,10 @@ type GraphNode = {
 type GraphEdge = { edge_id: string; source: string; target: string; relation: "contains" | "has_evidence" | "cited_from" };
 type EvidenceGraph = { run_id: string; nodes: GraphNode[]; edges: GraphEdge[] };
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
+// All browser API calls pass through the same-origin Next.js server, which
+// can hold a server-only bearer token in owner mode. Never put it in NEXT_PUBLIC_*.
 function apiEndpoint(path: string): string {
-  const url = new URL(path, apiUrl);
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error(`unsupported API protocol: ${url.protocol}`);
-  }
-  return url.toString();
+  return `/api/backend${path}`;
 }
 
 class ApiError extends Error {
@@ -213,7 +209,8 @@ export default function Home() {
     retry: false,
   });
   const claimTooLong = claim.length > 2000;
-  const demoOnly = capabilitiesQuery.data?.demo_only ?? false;
+  // Do not enable arbitrary input until the backend confirms its current mode.
+  const demoOnly = capabilitiesQuery.data?.demo_only ?? true;
   const demoClaim = capabilitiesQuery.data?.demo_claim ?? FIXTURE_DEMO_CLAIM;
 
   useEffect(() => {
@@ -227,14 +224,14 @@ export default function Home() {
       <label htmlFor="claim">Technical or scientific claim</label>
       <textarea id="claim" value={claim} disabled={demoOnly} onChange={(event) => setClaim(event.target.value)} aria-describedby={demoOnly ? "claim-demo-help" : claimTooLong ? "claim-error" : "claim-help"} aria-invalid={claimTooLong} placeholder="Example: RAG eliminates hallucinations." />
       {demoOnly ? <p id="claim-demo-help" className="helper" role="status">Public demo mode accepts only the built-in synthetic example. Do not enter confidential claims.</p> : claimTooLong ? <p id="claim-error" className="field-error" role="alert">Keep the claim under 2,000 characters.</p> : <p id="claim-help" className="helper">Preserved as entered; only whitespace is normalized for analysis.</p>}
-      <div className="actions"><button disabled={demoOnly || !claim.trim() || claimTooLong || mutation.isPending} onClick={() => mutation.mutate(claim)}>{mutation.isPending ? "Verifying…" : "Verify claim"}</button><button className="secondary-button" type="button" disabled={mutation.isPending} onClick={() => { setClaim(demoClaim); mutation.mutate(demoClaim); }}>Try deterministic demo</button><span className="action-hint">Fixture demo is deterministic and does not use live provider quota.</span></div>
+      <div className="actions"><button disabled={demoOnly || !claim.trim() || claimTooLong || mutation.isPending} onClick={() => mutation.mutate(claim)}>{mutation.isPending ? "Verifying…" : "Verify claim"}</button><button className="secondary-button" type="button" disabled={mutation.isPending} onClick={() => { setClaim(demoClaim); mutation.mutate(demoClaim); }}>{demoOnly ? "Try deterministic demo" : "Use example claim"}</button><span className="action-hint">{demoOnly ? "Fixture demo is deterministic and does not use live provider quota." : "Live verification uses configured retrieval and providers, subject to availability and free quotas."}</span></div>
       {mutation.isError ? <div className="error-summary" ref={errorSummaryRef} role="alert" tabIndex={-1} aria-labelledby="error-title"><h2 id="error-title">Verification needs attention</h2><p><strong>{mutation.error instanceof ApiError ? mutation.error.code : "REQUEST_FAILED"}</strong> · {mutation.error.message}</p><button className="secondary-button" type="button" onClick={() => mutation.mutate(claim)}>Try again</button></div> : null}
     </section>
     <ProviderPanel providers={providersQuery.data ?? []} isLoading={providersQuery.isLoading} />
     {mutation.data && <section className="panel result-panel" aria-live="polite">
       <div className="result-head"><div><div className="eyebrow">Run {mutation.data.run_id}</div><div className="verdict">{mutation.data.verdict}</div></div><div className="result-meta"><span className={`run-status ${mutation.data.status.toLowerCase()}`}>{mutation.data.status}</span><span>Confidence in this run: {(mutation.data.confidence * 100).toFixed(0)}%</span></div></div>
       {mutation.data.issue_code ? <div className="degraded-banner" role="status"><strong>{mutation.data.issue_code}</strong><span>{issueDescription(mutation.data.issue_code)}</span></div> : null}
-      <p className="lede result-summary">{mutation.data.summary}</p><p className="artifact-link"><a href={runArtifactHref(mutation.data.run_id)}>Open shareable run artifact</a><span>Loads persisted evidence without rerunning verification.</span></p>
+      <p className="lede result-summary">{mutation.data.summary}</p><p className="artifact-link"><a href={runArtifactHref(mutation.data.run_id)}>{demoOnly ? "Open shareable demo artifact" : "Open private run artifact"}</a><span>Loads persisted evidence without rerunning verification.{demoOnly ? "" : " Owner authentication is required."}</span></p>
       <div className="grid overview-grid"><div className="card"><h3>Atomic claims</h3><ul>{mutation.data.atomic_claims.map((item) => <li key={item.atomic_id}>{item.text}</li>)}</ul></div><div className="card"><h3>Conditions</h3><ul>{(mutation.data.conditions.length ? mutation.data.conditions : ["No additional conditions recorded."]).map((item) => <li key={item}>{item}</li>)}</ul></div><div className="card"><h3>Limitations</h3><ul>{(mutation.data.limitations.length ? mutation.data.limitations : ["No additional limitations recorded."]).map((item) => <li key={item}>{item}</li>)}</ul></div></div>
       {graphQuery.data ? <EvidenceGraphView graph={graphQuery.data} /> : <section className="card graph-loading" aria-live="polite">{graphQuery.isLoading ? "Loading persisted evidence graph…" : "Evidence graph could not be loaded; the run result remains available above."}</section>}
       <div className="grid evidence-grid"><div className="card"><h3>Supporting evidence</h3>{mutation.data.supporting_evidence.length ? mutation.data.supporting_evidence.map((item) => <div className="source" key={item.evidence_id}><p>{item.excerpt}</p><small>{item.provenance} · {item.evidence_level}</small></div>) : <p>No supporting evidence was cited.</p>}</div><div className="card"><h3>Contradicting evidence</h3>{mutation.data.contradicting_evidence.length ? mutation.data.contradicting_evidence.map((item) => <div className="source" key={item.evidence_id}><p>{item.excerpt}</p><small>{item.provenance} · {item.evidence_level}</small></div>) : <p>No contradicting evidence was cited.</p>}</div><div className="card"><h3>Sources</h3>{mutation.data.sources.length ? mutation.data.sources.map((source) => <details className="source" key={source.source_id}><summary>{source.title}</summary><p>{source.abstract ?? "No abstract was stored for this source."}</p><small>{source.source_type} · {source.evidence_level} · {source.provenance}</small>{source.url?.startsWith("http") ? <a href={source.url} target="_blank" rel="noreferrer">Open source</a> : null}</details>) : <p>No source records were retained.</p>}</div></div>

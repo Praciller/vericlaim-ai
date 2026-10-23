@@ -2,6 +2,17 @@
 
 VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learning, software engineering, and scientific-computing claims. It is deliberately not a generic fact-check chatbot: agents have bounded responsibilities, retrieval is source-adapter based, and a verdict is valid only when it can be traced to stored evidence and provenance.
 
+## Owner-only real-claim mode (prepared, not yet deployed)
+
+The Web includes a server-side FastAPI gateway and owner-only Basic auth
+for a future private live-claim release. This never puts the FastAPI bearer
+token or AI provider keys in the browser. Anonymous portfolio demo mode remains
+the **current live Production** until separately configured owner credentials,
+free-tier provider access and a bounded end-to-end live smoke have all passed.
+Follow [the real-claim Production cutover guide](docs/live-production.md);
+portable disaster-recovery escrow is tracked separately and is not a blocker
+for a non-destructive private release.
+
 ## Portfolio demo (deterministic fixture only)
 
 **Production verified (2026-10-23):** The hosted portfolio demo now serves
