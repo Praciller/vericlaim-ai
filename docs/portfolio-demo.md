@@ -179,11 +179,47 @@ independent restorable encrypted export held outside the Neon project before
 a data-destructive release. Do not place export credentials or data into
 GitHub, CI logs or public artifacts.
 
-The remote Windows Chrome/Codex control integration stopped being authorized
-in the follow-up session, so the recovery verification could not be
-completed. Do not infer a restore test from an incomplete inspection.
-Once access is restored, re-verify branch identity and recovery evidence
-before staged production API and Web deployment.
+### Isolated recovery-read test and outstanding count verification
+
+On **2026-10-23**, Desktop Commander was reconnected through the authorized
+Personal account and Codex re-opened the existing authenticated Chrome/Neon
+session. The permanent backup branch was independently rechecked:
+
+- Project and parent: correct matching production Neon project; backup parent
+  is production `main`.
+- Backup branch expiration: **Never**, verified on branch Overview.
+- Full data-and-schema backup branch has all six inspected table names:
+  `verification_runs`, `claims`, `evidence`, `agent_runs`, `verdicts`, `sources`.
+- A **temporary child branch** named `restore-test-vericlaim-20261023` was
+  successfully created from the **backup branch** (not production main),
+  with the *Branch data and schema* option. The child branch Overview
+  confirmed the expected backup parent and 1-hour expiration.
+- The independent child branch's tables page showed all six critical table
+  names again, establishing that a branch can be created and read from
+  the stored backup lineage without modifying production main.
+- The Neon SQL Editor did not expose usable query controls in the browser
+  session, so **no COUNT(*) comparisons were performed**. This does not
+  prove that every existing record is restorable or that the original
+  pre-release data set is complete.
+- Neon requested an action-time confirmation before permanently deleting
+  the isolated test branch. No permanent deletion was executed. Its
+  configured auto-expiration was **2026-10-23 18:49:08 Asia/Bangkok**.
+  Confirm the temporary branch has expired before any further branch
+  creation, and preserve the non-expiring original backup.
+
+**Production cutover remains blocked:** a matching backup branch and
+successful schema-level recovery test provide useful protection, but a
+row-level parity or restore test and preferably an off-project encrypted
+export are still required before permitting retention cleanup against the
+existing production Postgres data. Neither Web nor API production alias
+was changed in this verification.
+
+To complete this gate, use the verified Neon account's interactive SQL
+Editor or a separately authorized read-only PostgreSQL client to compare
+aggregate counts on the backup and production main. Do not copy connection
+secrets into GitHub, chat messages or logs; run only SELECT COUNT(*) and
+validate a restorable external export before approving a data-destructive
+production change.
 
 ### Post-deployment acceptance
 
