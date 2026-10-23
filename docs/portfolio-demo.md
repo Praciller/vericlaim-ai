@@ -139,8 +139,8 @@ The authenticated Vercel project Storage UI and Neon Console independently
 identified the same production datastore, **`vericlaim-production`**:
 
 - Vercel: `vericlaim-api` → Production Storage `vericlaim-production`.
-- Neon project ID: `twilight-fog-90511353`; default production branch
-  `main` (`br-icy-cherry-avezqprn`).
+- The production Neon Project ID and default branch ID were verified
+  against the authenticated provider dashboards; the default branch is `main`.
 - The non-secret Vercel `DATABASE_NEON_PROJECT_ID` reference was compared
   directly to the Neon Console project ID and **matched**. The actual
   `DATABASE_URL` value and database credentials were not disclosed.
@@ -154,7 +154,7 @@ As an additional preservation measure, a **new child branch from production
 | Attribute | Recorded value |
 | --- | --- |
 | Backup branch | `backup-pre-vericlaim-release-2026-10-23` |
-| Branch ID | `br-crimson-union-avb9htpz` |
+| Branch identity | Verified in the authenticated Neon Console; do not publish IDs/credentials |
 | Parent | Production `main` |
 | Copy mode | **Data and schema** (not schema-only) |
 | Auto-delete | **Never** selected during branch creation |
