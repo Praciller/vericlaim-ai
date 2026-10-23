@@ -145,7 +145,18 @@ class Database:
             and self.engine.url.database != ":memory:"
         ):
             Path(self.engine.url.database).parent.mkdir(parents=True, exist_ok=True)
-        Base.metadata.create_all(self.engine)
+        if self.engine.dialect.name == "postgresql":
+            # Multiple serverless instances may initialize the same empty
+            # database concurrently. SQLAlchemy's checkfirst is not atomic.
+            # Serialize schema introspection + DDL in one PG transaction.
+            with self.engine.begin() as connection:
+                connection.execute(
+                    text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                    {"lock_key": 291827653951},  # Stable application bootstrap lock
+                )
+                Base.metadata.create_all(connection)
+        else:
+            Base.metadata.create_all(self.engine)
         self.purge_expired()
 
     def _cutoff(self) -> datetime:
