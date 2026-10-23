@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 
 export function privateModeEnabled(): boolean {
   return process.env.VERICLAIM_PRIVATE_MODE === "true";
@@ -12,9 +12,12 @@ export function privateModeConfigured(): boolean {
 }
 
 function safeMatch(a: string, b: string): boolean {
-  const first = createHash("sha256").update(a, "utf8").digest();
-  const second = createHash("sha256").update(b, "utf8").digest();
-  return timingSafeEqual(first, second);
+  // Both values are compared as raw bytes: SHA-256 is deliberately not a
+  // password hash. The password is a separate, high-entropy Vercel secret.
+  const supplied = Buffer.from(a, "utf8");
+  const expected = Buffer.from(b, "utf8");
+  if (supplied.length !== expected.length) return false;
+  return timingSafeEqual(supplied, expected);
 }
 
 export function ownerAuthorized(authorization: string | null): boolean {
