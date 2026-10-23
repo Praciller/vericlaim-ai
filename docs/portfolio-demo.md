@@ -207,6 +207,16 @@ session. The permanent backup branch was independently rechecked:
   Confirm the temporary branch has expired before any further branch
   creation, and preserve the non-expiring original backup.
 
+**Optional non-destructive migration safeguard:** this release introduces
+`RUN_RETENTION_PURGE_ENABLED=false` as a server-only temporary preservation
+mode. If enabled for the next API deployment, physical deletion is skipped
+on startup, writes, and expired-run reads; expired share links still return
+404. This avoids the immediate irreversible 30-day cleanup during a controlled
+cutover but retains old claim/trace rows at rest. **It is not a verified
+backup, a permanent retention-policy replacement, or an authorization to
+deploy automatically.** Record the date enabled, access restrictions, and
+planned re-enablement only after validated independent data recovery.
+
 **Production cutover remains blocked:** a matching backup branch and
 successful schema-level recovery test provide useful protection, but a
 row-level parity or restore test and preferably an off-project encrypted

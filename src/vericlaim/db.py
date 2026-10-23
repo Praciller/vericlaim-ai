@@ -123,11 +123,13 @@ class Database:
         url: str,
         *,
         retention_days: int = 30,
+        purge_enabled: bool = True,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         if retention_days < 1:
             raise ValueError("retention_days must be positive")
         self.retention_days = retention_days
+        self.purge_enabled = purge_enabled
         self.clock = clock
         if url.startswith("postgres://"):
             url = "postgresql+psycopg://" + url.removeprefix("postgres://")
@@ -153,11 +155,14 @@ class Database:
         return now.astimezone(UTC) - timedelta(days=self.retention_days)
 
     def purge_expired(self) -> int:
-        """Delete old runs and every linked record in one transaction.
+        """Delete expired runs and linked rows only if purge is enabled.
 
-        Called on startup, on writes and upon reads of expired run IDs. This
-        is opportunistic housekeeping, not a continuously running scheduler.
+        Explicit temporary preservation mode never writes DELETE statements,
+        including during startup, save or expired-run reads. Expired reads
+        remain unavailable irrespective of the storage purge switch.
         """
+        if not self.purge_enabled:
+            return 0
         cutoff = self._cutoff()
         with Session(self.engine) as session:
             count = session.scalar(

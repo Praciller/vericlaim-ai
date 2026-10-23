@@ -30,7 +30,11 @@ from .workflow import VerificationWorkflow
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
-database = Database(settings.database_url, retention_days=settings.run_retention_days)
+database = Database(
+    settings.database_url,
+    retention_days=settings.run_retention_days,
+    purge_enabled=settings.run_retention_purge_enabled,
+)
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
 DEMO_FIXTURE_CLAIM = "RAG eliminates hallucinations."

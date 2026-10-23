@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     rate_limit_backend: Literal["memory", "database"] = "memory"
     rate_limit_peer_secret: SecretStr | None = None
     run_retention_days: int = Field(default=30, ge=1, le=365)
+    run_retention_purge_enabled: bool = True
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
