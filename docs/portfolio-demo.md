@@ -138,6 +138,40 @@ temporarily retains expired data at rest (`RUN_RETENTION_PURGE_ENABLED=false`).
 Do **not** reactivate destructive 30-day cleanup until the operator
 explicitly approves both the recovery arrangement and data deletion.
 
+### Read-only retention-impact preflight
+
+Before any future retention cleanup approval, perform an aggregate-only preflight
+on a **disposable local restored database**, never directly against the public
+Production endpoint. The `scripts/retention_impact.py` command refuses remote
+PostgreSQL hosts, missing SQLite files, and nonlocal database types; it does not
+initialize schemas or execute DML. Both PostgreSQL and SQLite connections
+enforce read-only query mode during inspection.
+
+Supply credentials for the **disposable local restore only**, never Neon
+or Vercel. Prompt interactively rather than typing a password into a command
+or shell history, and pass the URL only through a temporary environment
+variable. Example for a local PostgreSQL copy listening on loopback:
+
+```powershell
+$localCredential = Get-Credential -Message 'Disposable local PostgreSQL only'
+$localUser = [uri]::EscapeDataString($localCredential.UserName)
+$localPassword = [uri]::EscapeDataString($localCredential.GetNetworkCredential().Password)
+try {
+  $env:RETENTION_PREFLIGHT_DATABASE_URL = "postgresql+psycopg://${localUser}:${localPassword}@127.0.0.1:5432/vericlaim_ci"
+  uv run --extra dev python scripts/retention_impact.py --days 30
+} finally {
+  Remove-Item Env:RETENTION_PREFLIGHT_DATABASE_URL -ErrorAction SilentlyContinue
+  Remove-Variable localPassword, localCredential -ErrorAction SilentlyContinue
+}
+```
+
+The tool returns only table counts and a UTC cutoff; it never displays run
+IDs, claim contents, evidence, credentials, or keys. The reported 30-day count
+is an estimate from the chosen **restored snapshot**, not proof of the live
+Production state or authorization to delete. Re-run the assessment as part of
+a separate, explicitly approved cleanup plan; issue #29 remains the safety
+gate. No current Production retention setting changes are authorized.
+
 ## Release verification and observed startup fix
 
 All feature, security and documentation PRs were merged through protected
