@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { backendAccessHeaders, backendEndpoint } from "../../lib/backend";
+import { ownerAuthorized, privateModeEnabled } from "../../lib/owner-auth";
 import { sanitizeRunArtifact } from "../../lib/run-artifact";
 
 type AtomicClaim = { atomic_id: string; text: string };
@@ -24,17 +27,12 @@ type GraphNode = {
 };
 type EvidenceGraph = { run_id: string; nodes: GraphNode[]; edges: unknown[] };
 
-// Server-side rendering uses an internal service hostname in Docker.
-// Do not expose INTERNAL_API_URL to the browser (no NEXT_PUBLIC_ prefix).
-const apiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-function endpoint(path: string): string {
-  const url = new URL(path, apiUrl);
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Unsupported API protocol');
-  return url.toString();
-}
+// Only the server handles the backend bearer token. It is never serialized to a page.
 async function loadJson<T>(path: string): Promise<T | null> {
-  const response = await fetch(endpoint(path), { cache: "no-store" });
+  const response = await fetch(backendEndpoint(path), {
+    cache: "no-store",
+    headers: backendAccessHeaders(),
+  });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Run artifact request failed (${response.status})`);
   return response.json() as Promise<T>;
@@ -42,6 +40,9 @@ async function loadJson<T>(path: string): Promise<T | null> {
 
 export default async function RunArtifactPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params;
+  const requestHeaders = await headers();
+  if (privateModeEnabled() && !ownerAuthorized(requestHeaders.get("authorization"))) notFound();
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(runId)) notFound();
   const encoded = encodeURIComponent(runId);
   const [rawRun, graph] = await Promise.all([
     loadJson<Record<string, unknown> & { run_id: string }>(`/api/v1/runs/${encoded}`),
@@ -57,7 +58,7 @@ export default async function RunArtifactPage({ params }: { params: Promise<{ ru
     <header className="hero artifact-hero">
       <div className="eyebrow">Persisted / sanitized / read only</div>
       <h1>Run artifact.<br /><span>{run.verdict}</span></h1>
-      <p className="lede">This page loads stored run evidence. Opening it does not rerun retrieval or inference.</p>
+      <p className="lede">This page loads stored run evidence. Opening it does not rerun retrieval or inference. Owner-only deployments require authentication to open this link.</p>
       <div className="hero-tags"><span>{run.status}</span><span>{run.run_id}</span><span>{Math.round(run.confidence * 100)}% run confidence</span></div>
     </header>
     <section className="panel result-panel">
