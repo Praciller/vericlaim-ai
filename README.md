@@ -4,17 +4,22 @@ VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learni
 
 ## Portfolio demo (deterministic fixture only)
 
-**Vercel release status (2026-10-23):** The production Web and API still
-serve older commit `e299bd8`; the production API's required
-`/api/v1/capabilities` endpoint returned **404**. Both Vercel projects are
-now verified in the connected Hobby team. An isolated **API + Web Preview**
-of reviewed commit `955c42c` passes fixture-only API checks, CORS and
-real desktop/mobile browser E2E (including persisted Run/Evidence Graph).
+**Production verified (2026-10-23):** The hosted portfolio demo now serves
+reviewed commits: **Web `7b7e886`**, **API `1c356e7`** (a backend-only
+PostgreSQL startup fix). Both existing Vercel Hobby projects are `READY`,
+and desktop/mobile browser E2E confirmed the fixture-only flow, persisted
+Run/Evidence Graph and no JavaScript errors. API Health/Ready, CORS,
+anonymous fixture acceptance and HTTP 403 for arbitrary claims all passed.
 
-**Production remains on the old deployment.** Switching the API to the new
-version may purge production Run records older than 30 days, so a verified
-restorable PostgreSQL backup or explicit acceptance of those deletions is
-required before cutover. Do not send sensitive claims to the old public API.
+The API has `RUN_RETENTION_PURGE_ENABLED=false` as an **explicit, temporary
+Production data-preservation exemption**: expired run links still return
+404, but legacy rows remain in storage until an independently restorable
+backup and retention cleanup are approved. Neon production's non-expiring
+backup branch passed six-table row-count parity before cutover. Review
+[the outstanding backup/retention issue](https://github.com/Praciller/vericlaim-ai/issues/29)
+before enabling physical purging. Do not submit sensitive claims; this
+is not a multi-user service.
+
 See [Portfolio demo release checklist](docs/portfolio-demo.md).
 
 
@@ -41,7 +46,7 @@ addition to unit tests, static checks and Docker image builds.
 
 ## What is implemented
 
-- FastAPI API with stable verification run IDs; local development defaults to SQLite, and PostgreSQL is supported for durable hosted persistence. The actual hosted database configuration has not yet been verified.
+- FastAPI API with stable verification run IDs; local development defaults to SQLite, and PostgreSQL is supported for durable hosted persistence. The Production database is verified as the linked Neon PostgreSQL project; credentials remain server-side.
 - LangGraph workflow: analyze → decompose → plan → support/counter research → audit → judge → critic → deterministic validation.
 - Strong-quantifier detection, compound-claim decomposition, Thai layout-only normalization, and structured Pydantic v2 models.
 - Offline deterministic fixture provider/source for reproducible development and tests.

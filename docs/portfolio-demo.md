@@ -1,231 +1,80 @@
-# Portfolio demo release contract
+# VeriClaim AI — Portfolio Demo Release Runbook
 
-## Chosen scope
+Last verified: **2026-10-23** (Asia/Bangkok). This document describes the
+**actual deployed** Vercel projects, not merely a tested Preview.
 
-VeriClaim AI is an **anonymous, deterministic portfolio exhibit**, not a
-multi-user fact-checking service. A visitor can use only the synthetic example
-`RAG eliminates hallucinations.`, inspect the evidence/provenance graph, and
-open a shareable run. Do **not** promise unrestricted claim entry, factual
-correctness, calibrated confidence, or a production uptime SLA.
+## Intended product and production status
 
-For Docker, the Web service sets `INTERNAL_API_URL=http://api:8000` for
-server-rendered shareable-run pages. Browser-side requests use
-`NEXT_PUBLIC_API_URL=http://localhost:8000` instead. Never publish the Docker
-service hostname as a `NEXT_PUBLIC_` variable. This separation is required:
-inside the Web container, `localhost` does not point at the API container.
+VeriClaim AI is an **anonymous, fixture-only portfolio demonstration**.
+Visitors can verify only the synthetic claim `RAG eliminates hallucinations.`,
+inspect evidence and provenance, and open a shareable run. It is **not** an
+authenticated multi-user fact-checking service, factual assurance, or an
+invitation to submit confidential material.
 
-The active Compose configuration runs `APP_ENV=production`,
-`PUBLIC_DEMO_ONLY=true`, `MOCK_PROVIDER_ENABLED=true`,
-`LIVE_RETRIEVAL_ENABLED=false`, and `DEFAULT_PROVIDER=mock`.
-Backend configuration validation rejects live providers/retrieval in public-demo
-mode. The demo allows no externally supplied URLs or provider/API credentials.
-It is not authentication for arbitrary user data.
+| Vercel production service | URL | Reviewed deployed source |
+| --- | --- | --- |
+| Web | https://vericlaim-web.vercel.app | `7b7e886` |
+| API | https://vericlaim-api.vercel.app | `1c356e7` |
 
-## Repeatable local/CI verification
+Both existing projects belong to the authenticated Vercel **Hobby** team
+`pracillatlove-3370s-projects`. Both deployment aliases were verified
+`READY` after release. Web and API were originally deployed manually and
+the projects are **not** configured for automatic deployment from GitHub.
+The API commit differs from Web only because of a reviewed **backend-only**
+PostgreSQL startup hotfix; Web source was unchanged by that commit.
 
-From the repo root with Docker available:
+## Production behavior and environment safety
 
-```bash
-docker compose build
-docker compose up -d --wait
-python3 scripts/smoke_public_demo.py
-docker compose down
-```
+Verified API behavior:
 
-The dedicated GitHub Actions **containers** job now builds both images, starts
-the production-shaped Compose services, calls the smoke, and always tears down
-the disposable stack and volume (including on a failed job). The smoke runs
-without dependencies beyond the Python standard library. It tests:
+- `GET /health`, `GET /ready`, and `GET /api/v1/capabilities`: HTTP 200;
+  capabilities advertises `demo_only=true` and the canonical fixture.
+- Anonymous `POST /api/v1/claims/verify` with any other claim: HTTP 403
+  `DEMO_ONLY` before inference, retrieval or persistence.
+- Built-in fixture: HTTP 200; saved Run, Evidence, and Evidence Graph
+  endpoints return HTTP 200 for its generated artifact.
+- CORS preflight for the exact HTTPS Web production origin returns 200 with
+  the expected `Access-Control-Allow-Origin` header.
+- Chromium E2E on 1440px desktop and 390px mobile: arbitrary text input
+  disabled, demo notice visible, fixture runs, shareable Run page and
+  Evidence Graph render, with **0 JavaScript page errors**.
 
-- API and Web readiness;
-- the **required** `demo_only=true` capability contract and the canonical
-  demo claim;
-- rejection of an arbitrary claim (HTTP 403, `DEMO_ONLY`), even with a
-  spoofed `X-Forwarded-For` header;
-- fixture-only verification and a persisted run ID;
-- retrieval of saved Run, Evidence, and Evidence Graph;
-- HTTP 200 for the shareable Next.js run page, and 404 for an unknown run.
-
-The smoke intentionally **refuses non-loopback URLs** to prevent mistakenly
-submitting write requests to a real publicly hosted service. Never modify it
-to send private claims or credentials to external domains.
-
-Backend pytest/Ruff/mypy, frontend test/lint/typecheck/build and SciFact
-offline regression remain independent CI requirements.
-
-## Hosted Demo — verified staging, production awaiting database safeguard
-
-Verified on **2026-10-23** using the authenticated Vercel account. Both
-production projects are owned by Vercel Hobby team
-`pracillatlove-3370s-projects`, and their existing deployments came from the
-Vercel CLI. They are not currently linked to GitHub auto-deployment:
-
-| Target | URL | Deployed commit | Status |
-| --- | --- | --- | --- |
-| API production | https://vericlaim-api.vercel.app | `e299bd8` | Old build; `/api/v1/capabilities` returned 404 |
-| Web production | https://vericlaim-web.vercel.app | `e299bd8` | Old build; home page returned 200 |
-| Reviewed GitHub main | https://github.com/Praciller/vericlaim-ai | `955c42c` | CI and security checks passed |
-
-The Vercel production **API** project now contains the following explicit
-configuration keys for the *next* deployment:
+Production API server-side environment is configured for
 `APP_ENV=production`, `PUBLIC_DEMO_ONLY=true`,
 `MOCK_PROVIDER_ENABLED=true`, `DEFAULT_PROVIDER=mock`,
-and `LIVE_RETRIEVAL_ENABLED=false`. These are non-sensitive mode switches,
-not provider API keys. The existing production PostgreSQL environment
-variables were **not edited**; values were not read or copied. Updating
-environment variables alone does not upgrade a running Vercel deployment.
+`LIVE_RETRIEVAL_ENABLED=false`, and
+`RUN_RETENTION_PURGE_ENABLED=false`. The existing Neon PostgreSQL
+`DATABASE_URL` is held in server-only Vercel environment settings.
+No credential values, database connection strings or user records are
+documented or printed here. These settings must never be exposed through
+`NEXT_PUBLIC_` variables, public issue comments or test artifacts.
 
-### Isolated Vercel Preview verification
+**Migration preservation is temporary:** `RUN_RETENTION_PURGE_ENABLED=false`
+prevents automatic SQL deletion during API startup, saves and expired-run
+reads. The default in the repository remains `true`. Expired Run/Evidence
+APIs still return 404 but expired payloads remain physically stored.
+Do not leave this exemption indefinitely. Access to the database must be
+restricted, and physical purging should resume only after an independently
+restorable backup and explicit retention approval. Track completion in
+[issue #29](https://github.com/Praciller/vericlaim-ai/issues/29)
+(target review: 2026-10-30).
 
-Both projects were built from the **same main commit** `955c42c` in Vercel
-Preview, leaving production aliases unchanged:
+## Production PostgreSQL recovery evidence
 
-- Web preview:
-  https://vericlaim-web-git-main-pracillatlove-3370s-projects.vercel.app
-- API preview:
-  https://vericlaim-api-git-main-pracillatlove-3370s-projects.vercel.app
+An authenticated Neon/Vercel account inspection verified the production
+Neon project `vericlaim-production` against Vercel Storage metadata.
+A child of its production `main` was created as
+`backup-pre-vericlaim-release-2026-10-23` with **Data and Schema** and
+`Expires: Never`; its presence and expiry setting were rechecked.
 
-The API preview is explicitly **fixture-only** and uses a disposable
-`sqlite:////tmp/vericlaim-preview.db` database, **not** the existing
-production PostgreSQL connection. Web preview points to the API preview URL,
-and API preview CORS permits only the specific Web preview origin. This
-ephemeral preview storage is **not suitable for durable production runs**.
+An isolated 1-hour recovery-test child was created **from the backup**,
+not production, with full data and schema. Six key tables appeared on the
+child and the child was later confirmed auto-expired. Production `main` and
+the original backup were not reset, restored, deleted or re-parented.
 
-Verified results:
+Pre-cutover read-only `SELECT COUNT(*)` checks reported:
 
-- API `/health`, `/ready`, and `/api/v1/capabilities`: HTTP 200,
-  `demo_only=true`, enabled providers only `mock`.
-- Arbitrary non-fixture claim: HTTP 403 `DEMO_ONLY`.
-- Built-in synthetic fixture: successful POST with persisted Run, Evidence,
-  and Evidence Graph endpoints returning 200.
-- Web browser E2E: 1440px desktop and 390px mobile; manual input disabled,
-  fixture button works, shareable Run/Evidence Graph renders with HTTP 200,
-  and no browser JavaScript errors.
-- Preview API CORS preflight for Web preview: HTTP 200, allow-origin restricted
-  to the tested preview Web domain.
-
-### Production release blocker: preserve or explicitly expire old records
-
-**Do not promote a Preview deployment to Production.** It was built using an
-intentionally temporary, isolated database and preview environment. Its
-passing smoke tests do not establish the safety of existing production data.
-
-The current backend initializes SQL tables and opportunistically **purges
-verification runs older than `RUN_RETENTION_DAYS` (default 30)**, including
-linked claim/evidence/provider trace rows. Switching the production API to
-this version could irreversibly delete legacy rows on startup. A rollback
-cannot restore those rows.
-
-Before switching production, the authorized owner must **verify a restorable
-backup/snapshot of the production PostgreSQL database or explicitly accept
-the documented retention cleanup and possible loss of old Run links**.
-The available Neon connector did not expose the Vercel-linked database
-project, so its backup/PITR status could **not** be verified through this
-connection. Do not infer that the Hobby/Neon plans offer backup guarantees.
-
-Once this prerequisite is satisfied, deploy **both existing Vercel production
-projects from reviewed commit `955c42c` (or a later approved commit)**,
-using the existing production database configuration and fixture-only
-environment values. Check production API readiness and CORS first, then
-Web. Confirm `NEXT_PUBLIC_API_URL` points to the intended production HTTPS
-API origin; never expose private database URLs or tokens to the browser.
-Retain the previous deployment IDs for code rollback, but remember that
-rollback does **not** undo database changes. GitHub Actions is not currently
-configured to deploy to Vercel, and Git auto-deploy must not be assumed.
-
-### Verified Neon production identity and recovery branch (2026-10-23)
-
-The authenticated Vercel project Storage UI and Neon Console independently
-identified the same production datastore, **`vericlaim-production`**:
-
-- Vercel: `vericlaim-api` → Production Storage `vericlaim-production`.
-- The production Neon Project ID and default branch ID were verified
-  against the authenticated provider dashboards; the default branch is `main`.
-- The non-secret Vercel `DATABASE_NEON_PROJECT_ID` reference was compared
-  directly to the Neon Console project ID and **matched**. The actual
-  `DATABASE_URL` value and database credentials were not disclosed.
-- Vercel-billed Neon Free plan showed **six hours** of point-in-time history
-  and **no existing scheduled snapshots**. A recovery capability in the UI
-  does not prove that an actual restore was tested.
-
-As an additional preservation measure, a **new child branch from production
-`main`** was created in the matching Neon project with these settings:
-
-| Attribute | Recorded value |
-| --- | --- |
-| Backup branch | `backup-pre-vericlaim-release-2026-10-23` |
-| Branch identity | Verified in the authenticated Neon Console; do not publish IDs/credentials |
-| Parent | Production `main` |
-| Copy mode | **Data and schema** (not schema-only) |
-| Auto-delete | **Never** selected during branch creation |
-| Schema evidence | The branch's Tables view showed `verification_runs`, `claims`, `evidence`, and other linked tables |
-
-**Limitations:** Creation and table names were observed, but independent
-verification of the branch's final expiration setting and a **successful
-restore test** remain outstanding. Do not treat table names as proof that
-every old row was copied correctly. A Neon child branch is not a separately
-exported off-platform backup; its availability still depends on the parent
-project/account and platform retention/quotas. The Free plan does not offer
-long-term scheduled snapshots here.
-
-**Release remains blocked pending recovery verification.** Using the
-authorized Neon interface, confirm the backup branch still says `Expires:
-Never`, inspect its parent/creation time, compare only aggregate counts of
-critical tables to production, and demonstrate recovery using a disposable
-isolated test branch or a non-destructive read from the backup. Do **not**
-reset, restore, delete or re-parent production `main` during the test. For
-stronger protection against project deletion or account loss, arrange an
-independent restorable encrypted export held outside the Neon project before
-a data-destructive release. Do not place export credentials or data into
-GitHub, CI logs or public artifacts.
-
-### Isolated recovery-read test and outstanding count verification
-
-On **2026-10-23**, Desktop Commander was reconnected through the authorized
-Personal account and Codex re-opened the existing authenticated Chrome/Neon
-session. The permanent backup branch was independently rechecked:
-
-- Project and parent: correct matching production Neon project; backup parent
-  is production `main`.
-- Backup branch expiration: **Never**, verified on branch Overview.
-- Full data-and-schema backup branch has all six inspected table names:
-  `verification_runs`, `claims`, `evidence`, `agent_runs`, `verdicts`, `sources`.
-- A **temporary child branch** named `restore-test-vericlaim-20261023` was
-  successfully created from the **backup branch** (not production main),
-  with the *Branch data and schema* option. The child branch Overview
-  confirmed the expected backup parent and 1-hour expiration.
-- The independent child branch's tables page showed all six critical table
-  names again, establishing that a branch can be created and read from
-  the stored backup lineage without modifying production main.
-- The Neon SQL Editor did not expose usable query controls in the browser
-  session, so **no COUNT(*) comparisons were performed**. This does not
-  prove that every existing record is restorable or that the original
-  pre-release data set is complete.
-- Neon requested an action-time confirmation before permanently deleting
-  the isolated test branch. No permanent deletion was executed. Its
-  configured auto-expiration was **2026-10-23 18:49:08 Asia/Bangkok**.
-  Confirm the temporary branch has expired before any further branch
-  creation, and preserve the non-expiring original backup.
-
-**Optional non-destructive migration safeguard:** this release introduces
-`RUN_RETENTION_PURGE_ENABLED=false` as a server-only temporary preservation
-mode. If enabled for the next API deployment, physical deletion is skipped
-on startup, writes, and expired-run reads; expired share links still return
-404. This avoids the immediate irreversible 30-day cleanup during a controlled
-cutover but retains old claim/trace rows at rest. **It is not a verified
-backup, a permanent retention-policy replacement, or an authorization to
-deploy automatically.** Record the date enabled, access restrictions, and
-planned re-enablement only after validated independent data recovery.
-
-### Follow-up Neon row-count verification (2026-10-23)
-
-Codex subsequently regained the interactive Neon SQL Editor through the
-authorized Chrome session. It selected each branch explicitly and ran
-**only read-only `SELECT COUNT(*)` queries**. The temporary recovery-test
-child was confirmed absent after its 1-hour auto-expiration; production
-`main` and the original non-expiring backup remained.
-
-| Table | Production main | Preserved backup |
+| Table | Production main | Backup |
 | --- | ---: | ---: |
 | `verification_runs` | 10 | 10 |
 | `claims` | 10 | 10 |
@@ -234,48 +83,79 @@ child was confirmed absent after its 1-hour auto-expiration; production
 | `verdicts` | 10 | 10 |
 | `sources` | 22 | 22 |
 
-**COUNT PARITY: PASS** for these six nonempty tables at verification time.
-Row counts do **not** establish byte-for-byte identity, application-level
-referential integrity, or the recoverability of every individual row.
-No personal claims, connections or credentials were copied into this report.
-The Neon project showed Free-plan status; exact incremental billing could
-not be verified because provider usage reporting may lag.
+**COUNT PARITY: PASS**, at the inspection time. These counts do not prove
+byte-for-byte equality or an independently restorable disaster-recovery
+copy. A child branch remains dependent on the same Neon project/account.
+The Neon Free plan offered approximately six hours of PITR at inspection
+and no pre-existing scheduled snapshots. No **off-project encrypted
+PostgreSQL export or isolated full-data restore** has yet been verified.
+Do not treat the Backup Branch as protection against whole-project loss.
 
-**Remaining production release gate:** physically deleting legacy rows
-still requires a verified independent restorable export or an explicit
-data-loss decision. The time-limited `RUN_RETENTION_PURGE_ENABLED=false`
-switch allows a controlled **non-destructive** deployment, provided the
-correct production server-only setting is confirmed before building, and
-expired records remain inaccessible through the API. That setting also
-delays deletion at rest, so data access restrictions, the retention exception
-and the date for returning to normal purging must be documented. The old
-production aliases have not yet been changed in this review.
+## Release verification and observed startup fix
 
-### Post-deployment acceptance
+All feature, security and documentation PRs were merged through protected
+`main` after GitHub Backend/Frontend/Containers, CodeQL and Gitleaks checks.
+The current Container CI also runs the real Compose demo smoke.
 
-Before linking the demo as current in a resume or portfolio:
+During the first upgraded API deployment, Vercel logged one PostgreSQL
+cold-start DDL race involving the `rate_limit_buckets` type. The reviewed
+[PR #28](https://github.com/Praciller/vericlaim-ai/pull/28)
+serializes PostgreSQL schema inspection and creation under a
+transaction-scoped advisory lock. It added a disposable PostgreSQL 16
+CI service and a regression test of **10 concurrent initializers**.
+Local PostgreSQL integration and all required GitHub PR checks passed.
 
-1. Identify the exact source commit deployed for **both** Web and API.
-2. Confirm `GET /health` and `GET /ready` return 200.
-3. Confirm `GET /api/v1/capabilities` returns exactly
-   `{"demo_only":true,"demo_claim":"RAG eliminates hallucinations."}`.
-4. In a reviewed browser session, check 390px and 1440px widths. Manual
-   arbitrary-claim entry must be disabled, a clear demo notice must appear,
-   and the deterministic demo action must work.
-5. Verify the fixture's run page, persisted evidence and graph without
-   sending any sensitive data, and confirm an unauthorized arbitrary claim is
-   rejected before any persistence.
-6. Confirm no provider credentials are enabled, no raw internal traces are
-   rendered, and no user-identifying data appear in screenshots or logs.
-7. Record test evidence, the deployment ID, relevant date, and rollback plan.
+API Hotfix `1c356e7` was then deployed without changing Web source.
+Production Browser E2E was rerun at 1440px and 390px and passed again.
+Vercel's grouped runtime error scan over the **five minutes after the
+hotfix** reported **no runtime error groups** for API or Web. Historical
+error groups from the earlier API deployment remain visible in longer
+time windows and must not be mistaken for new hotfix errors.
 
-If a step fails, do **not** mark the hosted preview production-ready. Keep the
-local Compose demonstration and its screenshot as the portfolio proof.
+## Local and CI reproduction
 
-## Deferred by design
+From the repository root, with Docker and Python available:
 
-Multi-user identity provider login, BFF/session auth, user-owned run
-permissions, distributed abuse prevention on trusted client identity, live
-retrieval benchmarking and paid provider quotas are **out of scope** for the
-fixture-only exhibit. They should become a separate product milestone only
-after the user intentionally chooses a multi-user service.
+```bash
+docker compose up -d --build --wait
+python scripts/smoke_public_demo.py
+docker compose down -v --remove-orphans
+```
+
+The smoke deliberately refuses remote URLs to avoid submitting writes
+to a public deployment. It tests health/readiness, fixture-only capabilities,
+403 denial of arbitrary input, saved artifacts, and the shareable SSR page.
+Do not disable its loopback safety gate to test a hosted API. Production
+acceptance must use a separately reviewed synthetic-only procedure.
+
+## Controlled deployment and rollback
+
+Before any further release:
+
+1. Confirm the exact GitHub `main` SHA and all protected-branch checks.
+2. Confirm the intended Vercel team/project IDs, production environment
+   **names/targets**, and server-only database identity. Do not print values.
+3. Preserve `PUBLIC_DEMO_ONLY=true`, mock-only inference, and the explicit
+   temporary `RUN_RETENTION_PURGE_ENABLED=false` until issue #29 is complete.
+4. Deploy API first from the reviewed SHA. Confirm `READY`, `/ready`,
+   `/api/v1/capabilities`, exact-origin CORS, rejection of custom claims,
+   and fixture/artifact endpoints before updating Web if Web code changed.
+5. Verify the Web run page at 390px and 1440px, provider-only fixture use,
+   and Vercel runtime errors. Record the two deployment IDs for rollback.
+6. If validation fails, rollback only the affected Vercel deployment.
+   Code rollback **cannot restore deleted or corrupted database rows**.
+   Do not reset, restore or switch the Neon production branch reflexively.
+
+Do not promote the ephemeral SQLite-backed **Preview** as a Production
+deployment: Production must retain its existing Neon PostgreSQL connection.
+No new paid services, free trials or promotional-credit dependencies
+were created for this release. Provider usage dashboards can lag; Hobby
+and Neon Free status alone do not guarantee a precise zero-billing total.
+
+## Deferred work
+
+Multi-user identity provider login, user-owned authorization and sessions,
+off-project encrypted backup/restore automation, stronger user-level abuse
+controls, live-provider benchmarks and React major-version migration are
+separate milestones. For now keep the public exhibit fixture-only and
+resolve the independent backup plus retention exception in issue #29.
