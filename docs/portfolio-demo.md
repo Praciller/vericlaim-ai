@@ -133,6 +133,58 @@ Retain the previous deployment IDs for code rollback, but remember that
 rollback does **not** undo database changes. GitHub Actions is not currently
 configured to deploy to Vercel, and Git auto-deploy must not be assumed.
 
+### Verified Neon production identity and recovery branch (2026-10-23)
+
+The authenticated Vercel project Storage UI and Neon Console independently
+identified the same production datastore, **`vericlaim-production`**:
+
+- Vercel: `vericlaim-api` → Production Storage `vericlaim-production`.
+- Neon project ID: `twilight-fog-90511353`; default production branch
+  `main` (`br-icy-cherry-avezqprn`).
+- The non-secret Vercel `DATABASE_NEON_PROJECT_ID` reference was compared
+  directly to the Neon Console project ID and **matched**. The actual
+  `DATABASE_URL` value and database credentials were not disclosed.
+- Vercel-billed Neon Free plan showed **six hours** of point-in-time history
+  and **no existing scheduled snapshots**. A recovery capability in the UI
+  does not prove that an actual restore was tested.
+
+As an additional preservation measure, a **new child branch from production
+`main`** was created in the matching Neon project with these settings:
+
+| Attribute | Recorded value |
+| --- | --- |
+| Backup branch | `backup-pre-vericlaim-release-2026-10-23` |
+| Branch ID | `br-crimson-union-avb9htpz` |
+| Parent | Production `main` |
+| Copy mode | **Data and schema** (not schema-only) |
+| Auto-delete | **Never** selected during branch creation |
+| Schema evidence | The branch's Tables view showed `verification_runs`, `claims`, `evidence`, and other linked tables |
+
+**Limitations:** Creation and table names were observed, but independent
+verification of the branch's final expiration setting and a **successful
+restore test** remain outstanding. Do not treat table names as proof that
+every old row was copied correctly. A Neon child branch is not a separately
+exported off-platform backup; its availability still depends on the parent
+project/account and platform retention/quotas. The Free plan does not offer
+long-term scheduled snapshots here.
+
+**Release remains blocked pending recovery verification.** Using the
+authorized Neon interface, confirm the backup branch still says `Expires:
+Never`, inspect its parent/creation time, compare only aggregate counts of
+critical tables to production, and demonstrate recovery using a disposable
+isolated test branch or a non-destructive read from the backup. Do **not**
+reset, restore, delete or re-parent production `main` during the test. For
+stronger protection against project deletion or account loss, arrange an
+independent restorable encrypted export held outside the Neon project before
+a data-destructive release. Do not place export credentials or data into
+GitHub, CI logs or public artifacts.
+
+The remote Windows Chrome/Codex control integration stopped being authorized
+in the follow-up session, so the recovery verification could not be
+completed. Do not infer a restore test from an incomplete inspection.
+Once access is restored, re-verify branch identity and recovery evidence
+before staged production API and Web deployment.
+
 ### Post-deployment acceptance
 
 Before linking the demo as current in a resume or portfolio:
