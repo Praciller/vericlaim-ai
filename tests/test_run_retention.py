@@ -148,3 +148,52 @@ def test_expiry_boundary_is_exclusive(workflow):
     assert db.get(result.run_id) is not None
     current[0] += timedelta(seconds=1)
     assert db.get(result.run_id) is None
+
+
+def test_migration_preserve_mode_blocks_reads_without_deleting_any_rows(workflow, tmp_path):
+    """A restart or read/write cannot irreversibly purge legacy production data."""
+    current = [datetime(2026, 10, 23, tzinfo=UTC)]
+    url = f"sqlite:///{(tmp_path / 'preserve.sqlite3').as_posix()}"
+    original = Database(url, retention_days=30, clock=lambda: current[0])
+    original.init()
+    old = workflow.verify({"claim": "RAG eliminates hallucinations."})
+    old.created_at = current[0]
+    original.save(old)
+
+    current[0] += timedelta(days=31)
+    preserved = Database(url, retention_days=30, purge_enabled=False, clock=lambda: current[0])
+    preserved.init()
+    assert preserved.get(old.run_id) is None
+    assert preserved.get_evidence(old.run_id) is None
+    assert preserved.purge_expired() == 0
+
+    new = workflow.verify({"claim": "RAG improves retrieval accuracy."})
+    new.created_at = current[0]
+    preserved.save(new)
+    assert preserved.get(new.run_id) is not None
+
+    restarted = Database(url, retention_days=30, purge_enabled=False, clock=lambda: current[0])
+    restarted.init()
+    assert restarted.get(old.run_id) is None
+    assert restarted.get(new.run_id) is not None
+    with Session(restarted.engine) as session:
+        for model in RELATED_MODELS:
+            assert session.scalar(
+                select(func.count()).select_from(model).where(model.run_id == old.run_id)
+            ) >= (1 if model != ProviderUsageRow else 0)
+        assert session.scalar(select(func.count()).select_from(VerificationRunRow)) == 2
+
+    # Once migration is approved and the flag is deliberately re-enabled,
+    # retention performs the usual cleanup and does not delete newer rows.
+    approved_purge = Database(url, retention_days=30, clock=lambda: current[0])
+    approved_purge.init()
+    assert approved_purge.get(old.run_id) is None
+    assert approved_purge.get(new.run_id) is not None
+    with Session(approved_purge.engine) as session:
+        for model in RELATED_MODELS:
+            assert (
+                session.scalar(
+                    select(func.count()).select_from(model).where(model.run_id == old.run_id)
+                )
+                == 0
+            )

@@ -264,6 +264,15 @@ Normal tests make no external LLM or retrieval calls, even when a developer's ig
   needed where expiry must be enforced promptly at rest. Reducing retention
   also removes historical demo links. Existing records are subject to this
   policy at the next app startup.
+  **Temporary migration preservation:** set `RUN_RETENTION_PURGE_ENABLED=false`
+  *server-side* to suspend physical deletion on startup, save and expired
+  reads, while still returning 404 for run/evidence/graph after the 30-day
+  cutoff. This is a temporary recovery/cutover safety measure, **not** a
+  compliant at-rest deletion policy: expired source claims and traces remain
+  stored and inaccessible via public endpoints, but still require restricted
+  database access and a documented cleanup deadline. It must not be left
+  disabled indefinitely. The default is `true`, so the existing retention
+  behavior and tests remain unchanged.
 - Persisted run URLs are **publicly readable to anyone with the run ID**.
   `GET /api/v1/runs/{run_id}` and its evidence endpoint serve narrow public
   fields without provider usage, internal agent traces, or assessment rationales.

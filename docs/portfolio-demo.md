@@ -207,19 +207,49 @@ session. The permanent backup branch was independently rechecked:
   Confirm the temporary branch has expired before any further branch
   creation, and preserve the non-expiring original backup.
 
-**Production cutover remains blocked:** a matching backup branch and
-successful schema-level recovery test provide useful protection, but a
-row-level parity or restore test and preferably an off-project encrypted
-export are still required before permitting retention cleanup against the
-existing production Postgres data. Neither Web nor API production alias
-was changed in this verification.
+**Optional non-destructive migration safeguard:** this release introduces
+`RUN_RETENTION_PURGE_ENABLED=false` as a server-only temporary preservation
+mode. If enabled for the next API deployment, physical deletion is skipped
+on startup, writes, and expired-run reads; expired share links still return
+404. This avoids the immediate irreversible 30-day cleanup during a controlled
+cutover but retains old claim/trace rows at rest. **It is not a verified
+backup, a permanent retention-policy replacement, or an authorization to
+deploy automatically.** Record the date enabled, access restrictions, and
+planned re-enablement only after validated independent data recovery.
 
-To complete this gate, use the verified Neon account's interactive SQL
-Editor or a separately authorized read-only PostgreSQL client to compare
-aggregate counts on the backup and production main. Do not copy connection
-secrets into GitHub, chat messages or logs; run only SELECT COUNT(*) and
-validate a restorable external export before approving a data-destructive
-production change.
+### Follow-up Neon row-count verification (2026-10-23)
+
+Codex subsequently regained the interactive Neon SQL Editor through the
+authorized Chrome session. It selected each branch explicitly and ran
+**only read-only `SELECT COUNT(*)` queries**. The temporary recovery-test
+child was confirmed absent after its 1-hour auto-expiration; production
+`main` and the original non-expiring backup remained.
+
+| Table | Production main | Preserved backup |
+| --- | ---: | ---: |
+| `verification_runs` | 10 | 10 |
+| `claims` | 10 | 10 |
+| `evidence` | 22 | 22 |
+| `agent_runs` | 90 | 90 |
+| `verdicts` | 10 | 10 |
+| `sources` | 22 | 22 |
+
+**COUNT PARITY: PASS** for these six nonempty tables at verification time.
+Row counts do **not** establish byte-for-byte identity, application-level
+referential integrity, or the recoverability of every individual row.
+No personal claims, connections or credentials were copied into this report.
+The Neon project showed Free-plan status; exact incremental billing could
+not be verified because provider usage reporting may lag.
+
+**Remaining production release gate:** physically deleting legacy rows
+still requires a verified independent restorable export or an explicit
+data-loss decision. The time-limited `RUN_RETENTION_PURGE_ENABLED=false`
+switch allows a controlled **non-destructive** deployment, provided the
+correct production server-only setting is confirmed before building, and
+expired records remain inaccessible through the API. That setting also
+delays deletion at rest, so data access restrictions, the retention exception
+and the date for returning to normal purging must be documented. The old
+production aliases have not yet been changed in this review.
 
 ### Post-deployment acceptance
 
