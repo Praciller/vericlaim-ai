@@ -83,13 +83,60 @@ Pre-cutover read-only `SELECT COUNT(*)` checks reported:
 | `verdicts` | 10 | 10 |
 | `sources` | 22 | 22 |
 
-**COUNT PARITY: PASS**, at the inspection time. These counts do not prove
-byte-for-byte equality or an independently restorable disaster-recovery
-copy. A child branch remains dependent on the same Neon project/account.
-The Neon Free plan offered approximately six hours of PITR at inspection
-and no pre-existing scheduled snapshots. No **off-project encrypted
-PostgreSQL export or isolated full-data restore** has yet been verified.
-Do not treat the Backup Branch as protection against whole-project loss.
+**COUNT PARITY: PASS**, at the pre-cutover inspection time. These counts
+did not prove byte-for-byte identity. A Neon child branch remains dependent
+on the same Neon account/project. The Neon Free plan offered approximately
+six hours of PITR at inspection and no pre-existing scheduled snapshots.
+
+### Independently encrypted local export and full restore (2026-10-23)
+
+An additional **provider-independent** archive was produced from Production
+Neon with PostgreSQL 18 `pg_dump -Fc` on a direct/unpooled connection,
+using a repeatable-read **exported snapshot**. The source connection
+was transferred directly from the authorized server-side Vercel setting
+into a local one-shot process over standard input, **not** published in
+shell command history, source files, logs, or the repository. The dump
+was encrypted in memory with **AES-256-GCM** before being written to disk.
+The 256-bit encryption key is separately protected by **Windows
+CurrentUser DPAPI**.
+
+The encrypted archive is stored **only on the authorized operator's
+Windows laptop**, outside Neon. It is deliberately **not** attached to
+this public GitHub repository or any CI artifact. The local operator's
+backup directory contains a manifest and executable recovery runbook.
+Encrypted archive size at test: **51,350 bytes**.
+
+The archive was decrypted in memory and fully imported with `pg_restore`
+into an isolated, disposable **PostgreSQL 18 Docker** database, with no
+connection to the production branch for restoration. The test was repeated
+offline, and all six source-snapshot versus restored table counts matched:
+
+| Table | Live export snapshot | Independently restored |
+| --- | ---: | ---: |
+| `verification_runs` | 15 | 15 |
+| `claims` | 15 | 15 |
+| `evidence` | 32 | 32 |
+| `agent_runs` | 130 | 130 |
+| `verdicts` | 15 | 15 |
+| `sources` | 32 | 32 |
+
+**ISOLATED FULL RESTORE: PASS.** Explicit post-restore checks also found
+**zero orphan rows** across `claims`, `evidence`, `agent_runs`, `verdicts`,
+and `sources`. Source and restore counts come from the **same exported
+snapshot**; these may be greater than the earlier 10-run pre-cutover
+Neon-branch comparison because the Production fixture demo was exercised.
+The temporary restore PostgreSQL container and its data were removed.
+
+**Important remaining risk:** while the encrypted archive is outside
+Neon, its DPAPI-wrapped recovery key is only usable with the original
+Windows user profile; neither a portable recovery-key escrow nor an
+off-device encrypted archive copy has been confirmed. Local disk loss,
+machine failure or profile loss could render this backup inaccessible.
+Follow [issue #29](https://github.com/Praciller/vericlaim-ai/issues/29)
+for secure portable-key storage and an off-device copy. Also, the API
+temporarily retains expired data at rest (`RUN_RETENTION_PURGE_ENABLED=false`).
+Do **not** reactivate destructive 30-day cleanup until the operator
+explicitly approves both the recovery arrangement and data deletion.
 
 ## Release verification and observed startup fix
 
