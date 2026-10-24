@@ -5,7 +5,11 @@
  */
 export function trustedOwnerBearerBackend(
   url: URL,
-  runtime: { VERCEL?: string; VERCEL_ENV?: string; INTERNAL_API_URL?: string } = process.env,
+  runtime: { VERCEL?: string; VERCEL_ENV?: string; INTERNAL_API_URL?: string } = {
+    VERCEL: process.env.VERCEL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    INTERNAL_API_URL: process.env.INTERNAL_API_URL,
+  },
 ): boolean {
   if (url.username || url.password) return false;
   if (url.origin === "https://vericlaim-api.vercel.app") return true;
