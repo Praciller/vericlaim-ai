@@ -2,10 +2,10 @@
 
 VeriClaim AI is an evidence-driven claim verification MVP for AI, machine learning, software engineering, and scientific-computing claims. It is deliberately not a generic fact-check chatbot: agents have bounded responsibilities, retrieval is source-adapter based, and a verdict is valid only when it can be traced to stored evidence and provenance.
 
-## Owner-only real-claim mode (prepared, not yet deployed)
+## Owner-only real-claim mode (gateway deployed, activation pending)
 
-The Web includes a server-side FastAPI gateway and owner-only Basic auth
-for a future private live-claim release. This never puts the FastAPI bearer
+The deployed Web includes a server-side FastAPI gateway and owner-only Basic
+auth, but those protections and real-claim routing are not yet activated. This never puts the FastAPI bearer
 token or AI provider keys in the browser. Anonymous portfolio demo mode remains
 the **current live Production** until separately configured owner credentials,
 free-tier provider access and a bounded end-to-end live smoke have all passed.
@@ -19,12 +19,17 @@ inference/persistence still requires a separate gated live smoke.
 
 ## Portfolio demo (deterministic fixture only)
 
-**Production verified (2026-10-23):** The hosted portfolio demo now serves
-reviewed commits: **Web `7b7e886`**, **API `1c356e7`** (a backend-only
-PostgreSQL startup fix). Both existing Vercel Hobby projects are `READY`,
-and desktop/mobile browser E2E confirmed the fixture-only flow, persisted
-Run/Evidence Graph and no JavaScript errors. API Health/Ready, CORS,
-anonymous fixture acceptance and HTTP 403 for arbitrary claims all passed.
+**Production verified (2026-10-24):** The hosted portfolio demo remains
+anonymous and deterministic. Production deployments are **Web `f1c8af1`**
+(owner gateway code present but Private Mode disabled) and **API `1c356e7`**
+(Gemini configured but disabled, Mock enabled). Both Vercel projects are
+`READY`. Post-deploy HTTP smoke through the same-origin Web proxy confirmed
+200 responses for the home/capabilities/provider-status routes, HTTP 403 for
+arbitrary claim submissions, a successful allowed deterministic fixture,
+and persisted Run/Evidence/Evidence-Graph readback. API Health/Ready are 200.
+The previous desktop/mobile E2E was completed against the earlier Web demo
+release; the latest Web upgrade has passed the stated HTTP smoke, not a new
+full desktop/mobile browser matrix.
 
 The API has `RUN_RETENTION_PURGE_ENABLED=false` as an **explicit, temporary
 Production data-preservation exemption**: expired run links still return

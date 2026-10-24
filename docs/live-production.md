@@ -107,12 +107,14 @@ has been promoted to Production**:
 python scripts/preflight_hosted_release.py --expect demo
 ```
 
-As of 2026-10-24, the older Web Production deployment does **not** have the
-`/api/backend/...` route: a preflight against that older Production Web
-correctly fails `demo_web_proxy` (HTTP 404). This is **version drift**, not a
-Production outage. Do not waive the check or mistake it for a failed API.
-Use the reviewed Web + API Preview deployment pair below for the full strict
-demo-gateway check until the new Web code is safely released.
+As of 2026-10-24, Web Production was upgraded to merged-main gateway commit
+`f1c8af1` with **Private Mode disabled** and the API still in deterministic
+Demo Mode. The official Web/API Production origins now pass the strict
+anonymous demo-gateway GET checks. A bounded, non-sensitive post-deploy HTTP
+smoke also confirmed HTTP 403 for arbitrary claims, successful deterministic
+fixture verification, and persisted Run/Evidence/Graph readback. Do not
+misrepresent this smoke as evidence of a working private owner login or live
+Gemini inference.
 
 Run against the reviewed API and Web Previews (replace URLs with the actual
 deployment pair being tested):
