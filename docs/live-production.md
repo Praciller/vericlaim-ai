@@ -5,12 +5,29 @@ anonymous, deterministic public portfolio demo. It does **not** require
 completion of the portable recovery ZIP before release. It also does **not**
 authorize deleting old records.
 
-## Current blocker
+## Current launch gate (verified 2026-10-24)
 
-As of the 2026-10-24 inspection, Vercel API Production has **no** `API_ACCESS_TOKEN`
-or live `GEMINI_API_KEY`/`GROQ_API_KEY` entries, and Web has no private owner
-credentials or server-side API bearer token. Do not represent the project as a
-real-claim service until these are configured and a bounded live smoke passes.
+The API Production `GEMINI_API_KEY` now exists in Vercel **Production only**
+(secret contents were not inspected). API health and database readiness are both
+HTTP 200, and its provider status says Gemini is **configured but disabled**.
+The existing public deployments still run the anonymous fixture-only demo.
+
+The four **owner-authentication secrets** have not yet been saved in Vercel:
+
+- API Production: `API_ACCESS_TOKEN` and `RATE_LIMIT_PEER_SECRET`.
+- Web Production: `VERICLAIM_API_ACCESS_TOKEN` (the **same** API bearer value)
+  and `VERICLAIM_OWNER_PASSWORD` (a different secret).
+
+An existing Windows CurrentUser DPAPI credential bundle is available on
+`pracill`; do not rotate it while completing the two-project setup. Never
+retrieve plaintext credentials into AI messages, tool outputs, GitHub or logs.
+The owner can run the local credential-copy helper and paste each value into
+the appropriate Vercel **Secret/Sensitive Production** environment setting, or
+use the already-authenticated Vercel CLI's interactive `env add` flow. Do not
+set `VERICLAIM_PRIVATE_MODE=true` until both Web secrets and the API bearer
+are installed. Do not turn off `PUBLIC_DEMO_ONLY` until the complete release
+gate below passes. Track the changing deployment state in
+[release issue #35](https://github.com/Praciller/vericlaim-ai/issues/35).
 
 ## Release approach: one owner, free tier only
 
@@ -75,6 +92,57 @@ The internal backend proxy forwards only the explicit claim verification,
 capability/provider-status, and run/evidence/graph endpoints. It rejects
 unexpected paths, query strings, cross-origin POSTs, large payloads, and
 non-JSON upstream responses. Never turn this into an unrestricted HTTP proxy.
+
+## Read-only hosted release preflight
+
+The repository includes a standard-library-only smoke check. It uses bounded,
+redirect-free **GET** requests against the two approved VeriClaim Vercel hosts.
+It never submits claims, triggers inference, supplies a token, accesses a
+private run, or mutates stored data.
+
+Run against the public portfolio demo **after the reviewed Web gateway
+has been promoted to Production**:
+
+```powershell
+python scripts/preflight_hosted_release.py --expect demo
+```
+
+As of 2026-10-24, the older Web Production deployment does **not** have the
+`/api/backend/...` route: a preflight against that older Production Web
+correctly fails `demo_web_proxy` (HTTP 404). This is **version drift**, not a
+Production outage. Do not waive the check or mistake it for a failed API.
+Use the reviewed Web + API Preview deployment pair below for the full strict
+demo-gateway check until the new Web code is safely released.
+
+Run against the reviewed API and Web Previews (replace URLs with the actual
+deployment pair being tested):
+
+```powershell
+python scripts/preflight_hosted_release.py --expect demo `
+  --api https://vericlaim-bx6vzdw83-pracillatlove-3370s-projects.vercel.app `
+  --web https://vericlaim-a9fiffiu0-pracillatlove-3370s-projects.vercel.app
+```
+
+**After** the two services have been configured for a private launch, run:
+
+```powershell
+python scripts/preflight_hosted_release.py --expect private
+```
+
+Private mode must produce HTTP 401 for unauthenticated Web home and Web API
+proxy requests with this app's own HTTP Basic challenge, and HTTP 401 for a
+nonexistent run read from the directly reached API; an unrelated Vercel access
+challenge is **not** accepted as proof of app authorization. In addition it
+requires database readiness, `demo_only=false`, Gemini configured/enabled,
+and Mock disabled. An expected 401 is a deliberate success, not an error.
+
+The preflight is only an **anonymous protection and readiness check**. It
+cannot prove that the copied bearer token matches across both projects,
+that the owner password works, that Gemini actually answers claims, that
+external evidence is retrieved, or that run artifacts persist. These require
+the separate bounded, authenticated end-to-end live smoke in the release gate.
+Neither preflight nor the demo smoke should be used as authorization to promote
+an untested Production deployment.
 
 ## Two-phase release gate
 
