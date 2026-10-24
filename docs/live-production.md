@@ -121,7 +121,8 @@ python scripts/preflight_hosted_release.py --expect demo
 
 As of 2026-10-24, Web Production is on reviewed commit `f1c8af1`, and
 API Production on `ea96611`. Web **Private Mode is disabled** and the API
-continues to run the deterministic Demo Mode. The official Web/API Production origins now pass the strict
+continues to run the deterministic Demo Mode. The official Web/API
+Production origins now pass the strict
 anonymous demo-gateway GET checks. A bounded, non-sensitive post-deploy HTTP
 smoke also confirmed HTTP 403 for arbitrary claims, successful deterministic
 fixture verification, and persisted Run/Evidence/Graph readback. Do not
