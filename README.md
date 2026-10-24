@@ -21,9 +21,10 @@ inference/persistence still requires a separate gated live smoke.
 
 **Production verified (2026-10-24):** The hosted portfolio demo remains
 anonymous and deterministic. Production deployments are **Web `f1c8af1`**
-(owner gateway code present but Private Mode disabled) and **API `1c356e7`**
-(Gemini configured but disabled, Mock enabled). Both Vercel projects are
-`READY`. Post-deploy HTTP smoke through the same-origin Web proxy confirmed
+(owner gateway code present but Private Mode disabled) and **API `ea96611`**
+(Gemini configured but disabled, Mock enabled, `gemini-3.5-flash-lite`
+selected for future owner-only use). Both Vercel projects are `READY`.
+Post-deploy HTTP smoke through the same-origin Web proxy confirmed
 200 responses for the home/capabilities/provider-status routes, HTTP 403 for
 arbitrary claim submissions, a successful allowed deterministic fixture,
 and persisted Run/Evidence/Evidence-Graph readback. API Health/Ready are 200.
