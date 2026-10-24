@@ -60,7 +60,7 @@ branches or export/restore to Production.
 | `LIVE_RETRIEVAL_ENABLED` | `true` |
 | `GEMINI_ENABLED` | `true`, after a live free-quota check |
 | `GEMINI_API_KEY` | server-only API key from a genuinely ongoing free tier |
-| `GEMINI_MODEL` | verified free-tier model (e.g. `gemini-2.5-flash-lite`) |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` (stable, ongoing Free Tier listed by Google; actual key-specific quota must still be checked) |
 | `GROQ_ENABLED`, other live providers | `false` unless separately verified |
 | `MAX_PROVIDER_CALLS_PER_REQUEST` | `4` initially; adjust only with measured headroom |
 | `MAX_VERIFY_REQUESTS_PER_MINUTE` | `3` initially |
@@ -69,11 +69,23 @@ branches or export/restore to Production.
 | `RUN_RETENTION_PURGE_ENABLED` | **`false`**, preserve current rows pending issue #29 |
 | `CORS_ALLOWED_ORIGINS` | exact https://vericlaim-web.vercel.app origin |
 
-The free Gemini API is not universal or guaranteed by this runbook. Confirm
-your account's applicable free quota, that billing is not enabled or cannot
-charge, that the selected model is available, and that responses work before
-enabling live calls. The free tier's data-use terms may allow API inputs to be
-used to improve the provider's products. **Do not submit confidential claims.**
+Google restricts 2.5-family model access for some new projects (even though
+`gemini-2.5-flash-lite` is not deprecated). As of 2026-10-24, the selected
+stable model `gemini-3.5-flash-lite` is the officially recommended migration
+candidate for a newly created project and Google's pricing page lists its
+standard text input/output on an ongoing Free Tier. Official sources:
+[model catalog](https://ai.google.dev/gemini-api/docs/models),
+[model specification](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
+[pricing](https://ai.google.dev/gemini-api/docs/pricing).
+
+This does **not** establish that this particular Gemini key can invoke the
+model or has sufficient quotas. Before enabling the provider, confirm the
+project's free/no-billing status and current quotas in AI Studio and execute a
+single approved, non-sensitive bounded call. Do not auto-upgrade billing,
+use Gemini Search grounding (not available on the 3.5 Flash-Lite Free Tier),
+or submit confidential claims: Google says Free Tier inputs may be used to
+improve its products. Gemini remains disabled in Production until the full
+owner-only and live provider gates pass.
 
 ### Vercel Web project (`vericlaim-web`) — Production environment
 
@@ -107,9 +119,9 @@ has been promoted to Production**:
 python scripts/preflight_hosted_release.py --expect demo
 ```
 
-As of 2026-10-24, Web Production was upgraded to merged-main gateway commit
-`f1c8af1` with **Private Mode disabled** and the API still in deterministic
-Demo Mode. The official Web/API Production origins now pass the strict
+As of 2026-10-24, Web Production is on reviewed commit `f1c8af1`, and
+API Production on `ea96611`. Web **Private Mode is disabled** and the API
+continues to run the deterministic Demo Mode. The official Web/API Production origins now pass the strict
 anonymous demo-gateway GET checks. A bounded, non-sensitive post-deploy HTTP
 smoke also confirmed HTTP 403 for arbitrary claims, successful deterministic
 fixture verification, and persisted Run/Evidence/Graph readback. Do not
