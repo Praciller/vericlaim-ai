@@ -11,7 +11,11 @@ the **current live Production** until separately configured owner credentials,
 free-tier provider access and a bounded end-to-end live smoke have all passed.
 Follow [the real-claim Production cutover guide](docs/live-production.md);
 portable disaster-recovery escrow is tracked separately and is not a blocker
-for a non-destructive private release.
+for a non-destructive private release. A read-only hosted release preflight
+(`python scripts/preflight_hosted_release.py --expect demo` on the reviewed
+Web/API pair) checks deployment mode and anonymous access protections without
+posting a claim, calling an LLM, or modifying the database. Owner-authenticated
+inference/persistence still requires a separate gated live smoke.
 
 ## Portfolio demo (deterministic fixture only)
 
