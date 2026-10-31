@@ -144,10 +144,12 @@ def require_private_access(request: Request) -> None:
 
 @app.post(
     "/api/v1/claims/verify",
-    response_model=VerificationResult,
+    response_model=VerificationResult | PublicRunResponse,
     dependencies=[Depends(require_private_access)],
 )
-async def verify_claim(request: VerificationRequest, http_request: Request) -> VerificationResult:
+async def verify_claim(
+    request: VerificationRequest, http_request: Request
+) -> VerificationResult | PublicRunResponse:
     # Apply the public-demo data collection policy before inference, retrieval,
     # and persistence. This is not a substitute for multi-user authorization.
     if settings.public_demo_only and request.claim != DEMO_FIXTURE_CLAIM:
@@ -189,7 +191,7 @@ async def verify_claim(request: VerificationRequest, http_request: Request) -> V
             timeout=settings.request_timeout_seconds + 0.25,
         )
         database.save(result)
-        return result
+        return PublicRunResponse.from_result(result) if settings.public_demo_only else result
     except TimeoutError:
         raise HTTPException(
             status_code=504,

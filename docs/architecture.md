@@ -31,6 +31,12 @@ The JSON snapshot makes a run inspectable and reproducible while the separate ta
 
 The read-only evidence graph projection is built from that stored snapshot. It links the stored claim to deterministic atomic claims, then to same-run evidence and its source provenance. Graph reads do not retrieve new records or invoke an LLM, so source inspection remains safe when a provider is degraded or unavailable.
 
+The Web graph view follows the stored `has_evidence` and `cited_from` edges so
+reviewers can trace an atomic claim to evidence and its linked source record.
+The anonymous fixture API returns `PublicRunResponse`; browser-facing
+verification responses and persisted run pages also use a Web field allowlist.
+Provider traces, token usage, and assessment rationale stay server-side.
+
 ## Provider boundary
 
 `LLMProvider` returns normalized provider/configured-model/actual-model/text/token/latency/finish-reason/quota data. `ProviderRouter` selects a task-specific preferred provider and bounded fallbacks. A provider requires both an explicit enabled flag and a key; a configured-but-disabled provider remains visible in status without becoming callable. HTTP 401/403/402/429/5xx, timeout, malformed, and incomplete responses become categorized failures. At most one cheap same-provider retry is allowed before fallback, and vendor payloads/raw keys are never returned by the API.

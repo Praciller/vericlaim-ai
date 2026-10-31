@@ -47,9 +47,15 @@ See [Portfolio demo release checklist](docs/portfolio-demo.md).
 - Web: https://vericlaim-web.vercel.app
 - API: https://vericlaim-api.vercel.app
 
-Use **Try deterministic demo** to verify `RAG eliminates hallucinations.` with the checked-in fixture path. The **repository's Compose demo configuration** explicitly disables live retrieval/providers so this flow does not consume live-provider quota. Do not infer deployed environment settings from source configuration until deployment parity is verified. After a run completes, **Open shareable run artifact** opens `/runs/<run_id>` and reloads the persisted verdict, evidence, source provenance, conditions, limitations, and evidence graph without rerunning verification or retrieval.
+Use **Try deterministic demo** to verify `RAG eliminates hallucinations.` with the checked-in fixture path. The **repository's Compose demo configuration** explicitly disables live retrieval/providers so this flow does not consume live-provider quota. Do not infer deployed environment settings from source configuration until deployment parity is verified. After a run completes, **Open shareable demo artifact** opens `/runs/<run_id>` and reloads the persisted verdict, evidence, source provenance, conditions, limitations, and evidence graph without rerunning verification or retrieval.
 
-The public artifact is intentionally sanitized: provider usage, agent trace details, assessment rationale, credentials, prompts, raw provider responses, and internal errors are not rendered. The demo is bounded evidence for this fixture workflow, not a claim of universal factual correctness.
+### Reviewer walkthrough
+
+1. Check the page's **Current deployment** banner. The anonymous public deployment is fixture-only: it runs the built-in deterministic example, not live AI or external retrieval. If the capability check is unavailable, custom claim input stays locked. A deployment reporting non-demo mode is labeled separately; live provider use still depends on server-side configuration and can fall back.
+2. Select **Try deterministic demo**, then compare supporting and contradicting evidence. In the evidence graph, follow each evidence item to its cited source and inspect the stored provenance label. Read the conditions and limitations alongside the verdict.
+3. Open the run artifact. It reloads persisted run data and the same-run evidence graph without rerunning verification. The artifact shows the source records, provenance, and limitations used for that run.
+
+The anonymous fixture API and browser-facing Next.js gateway return a public run summary; the gateway applies its own field allowlist to successful verification responses, and the server-rendered artifact applies the same allowlist to stored runs. These boundaries omit provider traces, provider token usage, assessment rationale, credentials, prompts, raw provider responses, and internal errors. The demo is bounded evidence for this fixture workflow, not a claim of universal factual correctness.
 
 ![Hosted deterministic run artifact](docs/assets/public-demo/run-artifact.png)
 

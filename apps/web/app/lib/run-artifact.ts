@@ -20,3 +20,10 @@ export function sanitizeRunArtifact(run: RunLike): Record<string, unknown> & { r
   }
   return artifact as Record<string, unknown> & { run_id: string };
 }
+
+export function sanitizeVerificationResponse(value: unknown): (Record<string, unknown> & { run_id: string }) | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const run = value as Record<string, unknown>;
+  if (typeof run.run_id !== "string" || !run.run_id) return null;
+  return sanitizeRunArtifact(run as RunLike);
+}

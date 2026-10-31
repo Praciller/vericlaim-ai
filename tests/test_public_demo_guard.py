@@ -58,7 +58,22 @@ def test_fixture_remains_fully_usable_in_public_demo(monkeypatch, tmp_path):
     with TestClient(api_module.app) as client:
         response = client.post("/api/v1/claims/verify", json={"claim": f"  {FIXTURE}  "})
         assert response.status_code == 200
-        run_id = response.json()["run_id"]
+        public_run = response.json()
+        run_id = public_run["run_id"]
+        for field in (
+            "claim",
+            "queries",
+            "evidence",
+            "assessments",
+            "verdict_details",
+            "agent_runs",
+            "provider_usage",
+            "created_at",
+            "completed_at",
+        ):
+            assert field not in public_run
+        assert public_run["supporting_evidence"] is not None
+        assert public_run["contradicting_evidence"] is not None
         for path in (
             f"/api/v1/runs/{run_id}",
             f"/api/v1/runs/{run_id}/evidence",

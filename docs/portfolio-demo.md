@@ -39,6 +39,34 @@ Verified API behavior:
   disabled, demo notice visible, fixture runs, shareable Run page and
   Evidence Graph render, with **0 JavaScript page errors**.
 
+## Reviewer walkthrough and browser privacy
+
+The Web page reads `/api/v1/capabilities` and labels the active mode before
+allowing custom claims. The recorded public Production mode is fixture-only:
+the UI calls out that the built-in example is deterministic and does not
+represent live AI performance. If the mode check fails, custom input remains
+locked; only the built-in example can be submitted. A non-demo deployment is
+labeled separately, and the UI explains that provider use depends on
+server-side configuration and may fall back.
+
+For a portfolio review:
+
+1. Select **Try deterministic demo** for `RAG eliminates hallucinations.`.
+2. Compare supporting and contradicting evidence. Follow the evidence graph's
+   cited-source link and inspect the provenance stored with that source.
+3. Read the conditions and limitations, then open the persisted run artifact
+   to review the saved evidence graph and source records without rerunning the
+   workflow.
+
+The anonymous fixture API returns a public run summary. The same-origin Web
+gateway applies a public-field allowlist to successful verification responses
+before returning them to the browser, and the persisted artifact page uses
+that allowlist too. Browser responses omit agent traces, provider token usage,
+assessment rationale, and provider internals; public evidence excerpts, source
+records, and provenance remain available for review.
+This describes repository behavior and does not claim that an updated Web
+deployment has been released or production-verified.
+
 Production API server-side environment is configured for
 `APP_ENV=production`, `PUBLIC_DEMO_ONLY=true`,
 `MOCK_PROVIDER_ENABLED=true`, `DEFAULT_PROVIDER=mock`,

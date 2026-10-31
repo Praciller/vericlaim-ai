@@ -13,19 +13,6 @@ type Evidence = {
   evidence_level: string;
   direction: string;
 };
-type Assessment = {
-  evidence_id: string;
-  relevance: number;
-  directness: number;
-  source_quality: number;
-  recency: number;
-  temporal_compatibility: number;
-  scope_compatibility: number;
-  reproducibility_signal: number;
-  stance: EvidenceStance;
-  extraction_confidence: number;
-  rationale: string;
-};
 type Source = {
   source_id: string;
   title: string;
@@ -49,24 +36,9 @@ type Result = {
   conditions: string[];
   limitations: string[];
   atomic_claims: { atomic_id: string; text: string }[];
-  evidence: Evidence[];
-  assessments: Assessment[];
   supporting_evidence: Evidence[];
   contradicting_evidence: Evidence[];
   sources: Source[];
-  agent_runs: { agent_name: string; task: string; provider: string; model: string; status: string; error?: string | null }[];
-  provider_usage: { provider: string; configured_model?: string | null; actual_model?: string | null; task: string; total_tokens: number; latency_ms: number; fallbacks: string[] }[];
-};
-type ProviderStatus = {
-  name: string;
-  configured: boolean;
-  enabled: boolean;
-  model: string;
-  supports_structured_output: boolean;
-  note?: string | null;
-  last_status?: string | null;
-  quota_remaining_tokens?: number | null;
-  quota_limit_tokens?: number | null;
 };
 type PublicCapabilities = { demo_only: boolean; demo_claim: string };
 type GraphNode = {
@@ -121,18 +93,14 @@ const issueDescriptions: Record<string, string> = {
   PROVIDER_UNAVAILABLE: "The configured inference provider is unavailable. This result used a bounded deterministic path.",
   QUOTA_EXHAUSTED: "The inference provider reported exhausted quota. No provider switch was attempted.",
   PROVIDER_RATE_LIMIT: "The inference provider rate-limited this run. The result is marked degraded.",
-  PROVIDER_TIMEOUT: "The inference provider timed out. Inspect the trace before relying on the advisory output.",
+  PROVIDER_TIMEOUT: "The inference provider timed out. Review the recorded limitations before relying on the advisory output.",
   PROVIDER_AUTHENTICATION: "The configured inference credential was rejected. No credential details are shown here.",
   PROVIDER_RESPONSE_INVALID: "The inference provider returned an incomplete or invalid response.",
-  RETRIEVAL_UNAVAILABLE: "One or more evidence sources were unavailable; inspect the retained provenance.",
+  RETRIEVAL_UNAVAILABLE: "One or more evidence sources were unavailable; review the retained source provenance.",
 };
 
 function issueDescription(code: string | null | undefined): string {
   return code ? issueDescriptions[code] ?? "This run completed with a recorded operational limitation." : "";
-}
-
-function formatQuota(value: number | null | undefined): string {
-  return value === null || value === undefined ? "not reported" : value.toLocaleString();
 }
 
 function GraphColumn({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
@@ -144,11 +112,17 @@ function EvidenceGraphView({ graph }: { graph: EvidenceGraph }) {
   const evidence = graph.nodes.filter((node) => node.kind === "evidence");
   const sources = graph.nodes.filter((node) => node.kind === "source");
   const evidenceByAtomic = new Map<string, GraphNode[]>();
+  const sourcesByNodeId = new Map(sources.map((node) => [node.node_id, node]));
+  const sourceByEvidenceId = new Map<string, GraphNode>();
   graph.edges.filter((edge) => edge.relation === "has_evidence").forEach((edge) => {
     const items = evidenceByAtomic.get(edge.source) ?? [];
     const item = evidence.find((node) => node.node_id === edge.target);
     if (item) items.push(item);
     evidenceByAtomic.set(edge.source, items);
+  });
+  graph.edges.filter((edge) => edge.relation === "cited_from").forEach((edge) => {
+    const source = sourcesByNodeId.get(edge.target);
+    if (source) sourceByEvidenceId.set(edge.source, source);
   });
 
   return <section className="card graph-card" aria-labelledby="evidence-graph-title">
@@ -156,30 +130,25 @@ function EvidenceGraphView({ graph }: { graph: EvidenceGraph }) {
     <p className="helper">Follow each atomic claim to the evidence retrieved in this run and then to its stored source. The graph is a projection of persisted run data, not a separate research result.</p>
     <div className="graph-layout">
       <GraphColumn title="Atomic claims" eyebrow="01 · claim scope">
-        {atomics.length ? atomics.map((node) => <article className="graph-node atomic-node" key={node.node_id}><strong>{node.label}</strong><span>{(evidenceByAtomic.get(node.node_id) ?? []).length} linked evidence item{(evidenceByAtomic.get(node.node_id) ?? []).length === 1 ? "" : "s"}</span></article>) : <p className="empty">No atomic claims were recorded.</p>}
+        {atomics.length ? atomics.map((node) => {
+          const linkedEvidence = evidenceByAtomic.get(node.node_id) ?? [];
+          return <article id={node.node_id} className="graph-node atomic-node" key={node.node_id}><strong>{node.label}</strong><span>{linkedEvidence.length} linked evidence item{linkedEvidence.length === 1 ? "" : "s"}</span>{linkedEvidence.length ? <ul className="graph-link-list">{linkedEvidence.map((item) => <li key={item.node_id}><a href={`#${item.node_id}`}>{item.label}</a></li>)}</ul> : null}</article>;
+        }) : <p className="empty">No atomic claims were recorded.</p>}
       </GraphColumn>
       <div className="graph-connector" aria-hidden="true">→</div>
       <GraphColumn title="Evidence" eyebrow="02 · inspect excerpts">
-        {evidence.length ? evidence.map((node) => <details className={`graph-node evidence-node ${node.stance === "CONTRADICTS" ? "is-counter" : node.stance === "SUPPORTS" ? "is-support" : "is-neutral"}`} key={node.node_id}>
+        {evidence.length ? evidence.map((node) => <details id={node.node_id} className={`graph-node evidence-node ${node.stance === "CONTRADICTS" ? "is-counter" : node.stance === "SUPPORTS" ? "is-support" : "is-neutral"}`} key={node.node_id}>
           <summary><strong>{node.label}</strong><span className="status-chip">{node.stance ?? "UNASSESSED"}</span></summary>
           <p>{node.excerpt}</p>
-          <dl className="compact-dl"><div><dt>Direction</dt><dd>{node.direction ?? "not recorded"}</dd></div><div><dt>Level</dt><dd>{node.evidence_level ?? "not recorded"}</dd></div><div><dt>Provenance</dt><dd>{node.provenance ?? "not recorded"}</dd></div></dl>
+          <dl className="compact-dl"><div><dt>Direction</dt><dd>{node.direction ?? "not recorded"}</dd></div><div><dt>Level</dt><dd>{node.evidence_level ?? "not recorded"}</dd></div><div><dt>Provenance</dt><dd>{node.provenance ?? "not recorded"}</dd></div><div><dt>Cited source</dt><dd>{sourceByEvidenceId.get(node.node_id) ? <a href={`#${sourceByEvidenceId.get(node.node_id)?.node_id}`}>{sourceByEvidenceId.get(node.node_id)?.label}</a> : "No source link recorded"}</dd></div></dl>
         </details>) : <p className="empty">No evidence was cited.</p>}
       </GraphColumn>
       <div className="graph-connector" aria-hidden="true">→</div>
       <GraphColumn title="Sources" eyebrow="03 · verify origin">
-        {sources.length ? sources.map((node) => <article className="graph-node source-node" key={node.node_id}><strong>{node.label}</strong><span>{node.evidence_level ?? "source"}</span>{node.url?.startsWith("http") ? <a href={node.url} target="_blank" rel="noreferrer">Open source</a> : null}</article>) : <p className="empty">No source records were retained.</p>}
+        {sources.length ? sources.map((node) => <article id={node.node_id} className="graph-node source-node" key={node.node_id}><strong>{node.label}</strong><span>{node.evidence_level ?? "source"}</span><span>{node.provenance ?? "Provenance not recorded"}</span>{node.url?.startsWith("http") ? <a href={node.url} target="_blank" rel="noreferrer">Open source</a> : null}</article>) : <p className="empty">No source records were retained.</p>}
       </GraphColumn>
     </div>
     <div className="graph-legend" aria-label="Evidence graph legend"><span><i className="legend-dot support" /> Supports</span><span><i className="legend-dot counter" /> Contradicts</span><span><i className="legend-dot neutral" /> Neutral or unassessed</span></div>
-  </section>;
-}
-
-function ProviderPanel({ providers, isLoading }: { providers: ProviderStatus[]; isLoading: boolean }) {
-  return <section className="panel provider-panel" aria-labelledby="provider-status-title">
-    <div className="section-heading"><div><span className="eyebrow">Operational view</span><h2 id="provider-status-title">Inference providers</h2></div><span className="status-chip">{isLoading ? "Checking" : `${providers.filter((item) => item.enabled).length} enabled`}</span></div>
-    <p className="helper">Safe metadata only: configuration, model label, last status, and provider-reported quota. Keys and response bodies never appear here.</p>
-    {providers.length ? <div className="provider-grid">{providers.map((provider) => <article className={`provider-row ${provider.enabled ? "is-enabled" : "is-disabled"}`} key={provider.name}><div><strong>{provider.name}</strong><span>{provider.model}</span></div><div className="provider-meta"><span>{provider.enabled ? "enabled" : provider.configured ? "configured, disabled" : "not configured"}</span><span>{provider.last_status ?? "not checked"}</span><span>quota {formatQuota(provider.quota_remaining_tokens)}</span></div></article>)}</div> : <p className="empty">Provider status is unavailable.</p>}
   </section>;
 }
 
@@ -190,12 +159,6 @@ export default function Home() {
     queryKey: ["public-capabilities"],
     queryFn: async () => parseApiResponse<PublicCapabilities>(await fetch(apiEndpoint("/api/v1/capabilities"))),
     staleTime: 60_000,
-    retry: false,
-  });
-  const providersQuery = useQuery<ProviderStatus[]>({
-    queryKey: ["provider-status"],
-    queryFn: async () => parseApiResponse<ProviderStatus[]>(await fetch(apiEndpoint("/api/v1/providers/status"))),
-    staleTime: 30_000,
     retry: false,
   });
   const mutation = useMutation<Result, Error, string>({
@@ -212,30 +175,56 @@ export default function Home() {
   // Do not enable arbitrary input until the backend confirms its current mode.
   const demoOnly = capabilitiesQuery.data?.demo_only ?? true;
   const demoClaim = capabilitiesQuery.data?.demo_claim ?? FIXTURE_DEMO_CLAIM;
+  const mode = capabilitiesQuery.data
+    ? capabilitiesQuery.data.demo_only ? "fixture" : "non-demo"
+    : capabilitiesQuery.isError ? "unavailable" : "checking";
+  const modeTitle = mode === "fixture"
+    ? "Fixture-only public demo"
+    : mode === "non-demo"
+      ? "Non-demo mode · live AI may be configured"
+      : mode === "unavailable" ? "Runtime mode unavailable" : "Checking runtime mode";
+  const modeDescription = mode === "fixture"
+    ? `This deployment accepts only the built-in example “${demoClaim}”. Public demo settings require deterministic mock inference and disable live retrieval. This walkthrough demonstrates evidence handling, not live AI performance.`
+    : mode === "non-demo"
+      ? "This deployment accepts custom claims. Live model or retrieval calls depend on server-side configuration and may fall back. Avoid confidential claims."
+      : mode === "unavailable"
+        ? "Custom claim input stays locked until the API confirms its mode. The demo button sends only the built-in example; provider traces and token usage are not sent to this page."
+        : "Custom claim input stays locked while the API mode is checked. The demo button sends only the built-in example.";
+  const claimHelpId = mode === "fixture" ? "claim-demo-help" : mode === "non-demo" ? claimTooLong ? "claim-error" : "claim-help" : "claim-mode-help";
 
   useEffect(() => {
     if (mutation.isError) errorSummaryRef.current?.focus();
   }, [mutation.isError]);
 
   return <main className="shell"><div className="container">
-    <header className="hero"><div className="eyebrow">Evidence-driven claim verification</div><h1>Verify the claim.<br /><span>Inspect the evidence.</span></h1><p className="lede">VeriClaim AI decomposes technical claims, searches for support and counter-evidence, audits provenance, and reports uncertainty instead of reducing a research question to a model vote.</p><div className="hero-tags"><span>Bounded agents</span><span>Stored provenance</span><span>Deterministic validation</span></div></header>
-    <section className="panel verify-panel" aria-labelledby="claim-form-title">
+    <header className="hero"><div className="eyebrow">Evidence-driven claim verification</div><h1>Verify the claim.<br /><span>Inspect the evidence.</span></h1><p className="lede">VeriClaim AI decomposes technical claims, separates support from counter-evidence, tracks source provenance, and reports uncertainty.</p><div className="hero-tags"><span>Bounded workflow</span><span>Stored evidence graph</span><span>Deterministic validation</span></div></header>
+    <section className={`mode-banner mode-${mode}`} aria-labelledby="runtime-mode-title" role="status" aria-live="polite">
+      <div className="mode-heading"><span className="eyebrow">Current deployment</span><span className="mode-chip">{mode === "fixture" ? "No live AI" : mode === "non-demo" ? "Configuration dependent" : "Input locked"}</span></div>
+      <h2 id="runtime-mode-title">{modeTitle}</h2><p>{modeDescription}</p>
+    </section>
+    <section className="panel walkthrough" aria-labelledby="walkthrough-title">
+      <div className="section-heading"><div><span className="eyebrow">For reviewers</span><h2 id="walkthrough-title">Evidence walkthrough</h2></div></div>
+      <ol className="walkthrough-list">
+        <li><span className="step-number">01</span><h3>Run the built-in example</h3><p>Use the deterministic fixture to see the claim and verdict flow.</p><a href="#claim-form">Go to demo</a></li>
+        <li><span className="step-number">02</span><h3>Follow the evidence</h3><p>Compare supporting and contradicting evidence, then follow each cited source and its provenance.</p></li>
+        <li><span className="step-number">03</span><h3>Inspect what was saved</h3><p>Open the persisted run artifact to review the graph, source records, and limitations without rerunning it.</p></li>
+      </ol>
+    </section>
+    <section id="claim-form" className="panel verify-panel" aria-labelledby="claim-form-title">
       <div className="section-heading"><div><span className="eyebrow">Start a run</span><h2 id="claim-form-title">Claim to verify</h2></div><span className="char-count">{claim.length}/2000</span></div>
       <label htmlFor="claim">Technical or scientific claim</label>
-      <textarea id="claim" value={claim} disabled={demoOnly} onChange={(event) => setClaim(event.target.value)} aria-describedby={demoOnly ? "claim-demo-help" : claimTooLong ? "claim-error" : "claim-help"} aria-invalid={claimTooLong} placeholder="Example: RAG eliminates hallucinations." />
-      {demoOnly ? <p id="claim-demo-help" className="helper" role="status">Public demo mode accepts only the built-in synthetic example. Do not enter confidential claims.</p> : claimTooLong ? <p id="claim-error" className="field-error" role="alert">Keep the claim under 2,000 characters.</p> : <p id="claim-help" className="helper">Preserved as entered; only whitespace is normalized for analysis.</p>}
-      <div className="actions"><button disabled={demoOnly || !claim.trim() || claimTooLong || mutation.isPending} onClick={() => mutation.mutate(claim)}>{mutation.isPending ? "Verifying…" : "Verify claim"}</button><button className="secondary-button" type="button" disabled={mutation.isPending} onClick={() => { setClaim(demoClaim); mutation.mutate(demoClaim); }}>{demoOnly ? "Try deterministic demo" : "Use example claim"}</button><span className="action-hint">{demoOnly ? "Fixture demo is deterministic and does not use live provider quota." : "Live verification uses configured retrieval and providers, subject to availability and free quotas."}</span></div>
+      <textarea id="claim" value={claim} disabled={demoOnly} onChange={(event) => setClaim(event.target.value)} aria-describedby={claimHelpId} aria-invalid={claimTooLong} placeholder="Example: RAG eliminates hallucinations." />
+      {mode === "fixture" ? <p id="claim-demo-help" className="helper" role="status">Public demo mode accepts only the built-in synthetic example. Do not enter confidential claims.</p> : mode === "non-demo" ? claimTooLong ? <p id="claim-error" className="field-error" role="alert">Keep the claim under 2,000 characters.</p> : <p id="claim-help" className="helper">Preserved as entered; only whitespace is normalized for analysis.</p> : <p id="claim-mode-help" className="helper" role="status">Custom claim input stays locked until the API confirms its mode. The built-in example remains available.</p>}
+      <div className="actions"><button type="button" disabled={demoOnly || !claim.trim() || claimTooLong || mutation.isPending} onClick={() => mutation.mutate(claim)}>{mutation.isPending ? "Verifying…" : "Verify claim"}</button><button className="secondary-button" type="button" disabled={mutation.isPending} onClick={() => { setClaim(demoClaim); mutation.mutate(demoClaim); }}>{mode === "fixture" ? "Try deterministic demo" : mode === "non-demo" ? "Use example claim" : "Try built-in example"}</button><span className="action-hint">{mode === "fixture" ? "Runs only the built-in fixture; no live provider quota is used." : mode === "non-demo" ? "Provider and retrieval use depend on server-side configuration and availability." : "Only the built-in example can be run until mode is confirmed."}</span></div>
       {mutation.isError ? <div className="error-summary" ref={errorSummaryRef} role="alert" tabIndex={-1} aria-labelledby="error-title"><h2 id="error-title">Verification needs attention</h2><p><strong>{mutation.error instanceof ApiError ? mutation.error.code : "REQUEST_FAILED"}</strong> · {mutation.error.message}</p><button className="secondary-button" type="button" onClick={() => mutation.mutate(claim)}>Try again</button></div> : null}
     </section>
-    <ProviderPanel providers={providersQuery.data ?? []} isLoading={providersQuery.isLoading} />
-    {mutation.data && <section className="panel result-panel" aria-live="polite">
-      <div className="result-head"><div><div className="eyebrow">Run {mutation.data.run_id}</div><div className="verdict">{mutation.data.verdict}</div></div><div className="result-meta"><span className={`run-status ${mutation.data.status.toLowerCase()}`}>{mutation.data.status}</span><span>Confidence in this run: {(mutation.data.confidence * 100).toFixed(0)}%</span></div></div>
+    {mutation.data && <section id="run-result" className="panel result-panel" aria-live="polite" aria-labelledby="run-result-title">
+      <div className="result-head"><div><div className="eyebrow">Persisted run {mutation.data.run_id}</div><h2 id="run-result-title" className="verdict">{mutation.data.verdict}</h2></div><div className="result-meta"><span className={`run-status ${mutation.data.status.toLowerCase()}`}>{mutation.data.status}</span><span>Confidence in this run: {(mutation.data.confidence * 100).toFixed(0)}%</span></div></div>
       {mutation.data.issue_code ? <div className="degraded-banner" role="status"><strong>{mutation.data.issue_code}</strong><span>{issueDescription(mutation.data.issue_code)}</span></div> : null}
-      <p className="lede result-summary">{mutation.data.summary}</p><p className="artifact-link"><a href={runArtifactHref(mutation.data.run_id)}>{demoOnly ? "Open shareable demo artifact" : "Open private run artifact"}</a><span>Loads persisted evidence without rerunning verification.{demoOnly ? "" : " Owner authentication is required."}</span></p>
+      <p className="lede result-summary">{mutation.data.summary}</p><p className="artifact-link"><a href={runArtifactHref(mutation.data.run_id)}>{mode === "fixture" ? "Open shareable demo artifact" : "Open persisted run artifact"}</a><span>Loads persisted evidence without rerunning verification.</span></p>
       <div className="grid overview-grid"><div className="card"><h3>Atomic claims</h3><ul>{mutation.data.atomic_claims.map((item) => <li key={item.atomic_id}>{item.text}</li>)}</ul></div><div className="card"><h3>Conditions</h3><ul>{(mutation.data.conditions.length ? mutation.data.conditions : ["No additional conditions recorded."]).map((item) => <li key={item}>{item}</li>)}</ul></div><div className="card"><h3>Limitations</h3><ul>{(mutation.data.limitations.length ? mutation.data.limitations : ["No additional limitations recorded."]).map((item) => <li key={item}>{item}</li>)}</ul></div></div>
       {graphQuery.data ? <EvidenceGraphView graph={graphQuery.data} /> : <section className="card graph-loading" aria-live="polite">{graphQuery.isLoading ? "Loading persisted evidence graph…" : "Evidence graph could not be loaded; the run result remains available above."}</section>}
       <div className="grid evidence-grid"><div className="card"><h3>Supporting evidence</h3>{mutation.data.supporting_evidence.length ? mutation.data.supporting_evidence.map((item) => <div className="source" key={item.evidence_id}><p>{item.excerpt}</p><small>{item.provenance} · {item.evidence_level}</small></div>) : <p>No supporting evidence was cited.</p>}</div><div className="card"><h3>Contradicting evidence</h3>{mutation.data.contradicting_evidence.length ? mutation.data.contradicting_evidence.map((item) => <div className="source" key={item.evidence_id}><p>{item.excerpt}</p><small>{item.provenance} · {item.evidence_level}</small></div>) : <p>No contradicting evidence was cited.</p>}</div><div className="card"><h3>Sources</h3>{mutation.data.sources.length ? mutation.data.sources.map((source) => <details className="source" key={source.source_id}><summary>{source.title}</summary><p>{source.abstract ?? "No abstract was stored for this source."}</p><small>{source.source_type} · {source.evidence_level} · {source.provenance}</small>{source.url?.startsWith("http") ? <a href={source.url} target="_blank" rel="noreferrer">Open source</a> : null}</details>) : <p>No source records were retained.</p>}</div></div>
-      <details className="card trace-card"><summary>Run trace and provider usage</summary><p className="meta">Status: {mutation.data.status}</p><ul>{mutation.data.agent_runs.map((run) => <li key={`${run.agent_name}-${run.task}`}>{run.agent_name}: {run.provider} / {run.model} ({run.status}){run.error ? ` · ${run.error}` : ""}</li>)}</ul>{mutation.data.provider_usage.length ? <p className="meta">Usage: {mutation.data.provider_usage.map((usage) => `${usage.task}=${usage.provider}/${usage.actual_model ?? usage.configured_model ?? "unknown"}, ${usage.total_tokens} tokens, ${usage.latency_ms}ms`).join(" · ")}</p> : <p className="meta">No live provider usage recorded.</p>}</details>
       <p className="meta claim-metadata">Original: {mutation.data.original_claim}<br />Normalized: {mutation.data.normalized_claim}</p>
     </section>}
   </div></main>;
