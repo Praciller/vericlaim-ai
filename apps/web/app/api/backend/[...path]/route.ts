@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { backendAccessHeaders, backendEndpoint } from "../../../lib/backend";
 import { accessDenied, ownerAuthorized, privateModeConfigured, privateModeEnabled } from "../../../lib/owner-auth";
+import { sanitizeVerificationResponse } from "../../../lib/run-artifact";
 
 type Context = { params: Promise<{ path: string[] }> };
 const PUBLIC_READS = new Set(["api/v1/capabilities", "api/v1/providers/status"]);
@@ -45,6 +46,16 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     const headers: Record<string, string> = { "Content-Type": "application/json", "Cache-Control": "no-store" };
     const retryAfter = upstream.headers.get("retry-after");
     if (retryAfter && /^\d{1,4}$/.test(retryAfter)) headers["Retry-After"] = retryAfter;
+    if (method === "POST" && upstream.ok) {
+      let publicRun: ReturnType<typeof sanitizeVerificationResponse>;
+      try {
+        publicRun = sanitizeVerificationResponse(JSON.parse(text));
+      } catch {
+        publicRun = null;
+      }
+      if (!publicRun) return apiError(502, "BACKEND_PROTOCOL", "Invalid backend response");
+      return Response.json(publicRun, { status: upstream.status, headers });
+    }
     return new Response(text, { status: upstream.status, headers });
   } catch {
     return apiError(502, "BACKEND_UNAVAILABLE", "The verification service is unavailable");

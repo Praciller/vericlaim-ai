@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FIXTURE_DEMO_CLAIM, runArtifactHref, sanitizeRunArtifact } from "./run-artifact.ts";
+import { FIXTURE_DEMO_CLAIM, runArtifactHref, sanitizeRunArtifact, sanitizeVerificationResponse } from "./run-artifact.ts";
 
 const unsafeRun = {
   run_id: "run-123", status: "COMPLETED", original_claim: "RAG eliminates hallucinations.",
@@ -29,4 +29,21 @@ test("public artifacts drop provider and internal trace fields", () => {
   assert.equal(Object.hasOwn(artifact, "provider_usage"), false);
   assert.equal(JSON.stringify(artifact).includes("secret-provider"), false);
   assert.equal(artifact.run_id, "run-123");
+});
+
+test("browser verification responses use the public allowlist", () => {
+  const response = sanitizeVerificationResponse(unsafeRun);
+  assert.ok(response);
+  assert.equal(response.run_id, "run-123");
+  assert.equal(Object.hasOwn(response, "agent_runs"), false);
+  assert.equal(Object.hasOwn(response, "provider_usage"), false);
+  assert.equal(Object.hasOwn(response, "assessments"), false);
+  assert.equal(Object.hasOwn(response, "evidence"), false);
+  assert.equal(JSON.stringify(response).includes("secret-provider"), false);
+  assert.equal(JSON.stringify(response).includes("99"), false);
+});
+
+test("browser verification sanitizer rejects responses without a run id", () => {
+  assert.equal(sanitizeVerificationResponse({ provider_usage: [{ total_tokens: 99 }] }), null);
+  assert.equal(sanitizeVerificationResponse(null), null);
 });

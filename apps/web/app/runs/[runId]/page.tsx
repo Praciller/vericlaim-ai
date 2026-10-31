@@ -23,9 +23,12 @@ type PublicRun = {
 };
 type GraphNode = {
   node_id: string; kind: "claim" | "atomic_claim" | "evidence" | "source";
-  label: string; stance?: string | null; provenance?: string | null;
+  label: string; excerpt?: string | null; source_id?: string | null;
+  stance?: string | null; evidence_level?: string | null;
+  provenance?: string | null; url?: string | null;
 };
-type EvidenceGraph = { run_id: string; nodes: GraphNode[]; edges: unknown[] };
+type GraphEdge = { edge_id: string; source: string; target: string; relation: "contains" | "has_evidence" | "cited_from" };
+type EvidenceGraph = { run_id: string; nodes: GraphNode[]; edges: GraphEdge[] };
 
 // Only the server handles the backend bearer token. It is never serialized to a page.
 async function loadJson<T>(path: string): Promise<T | null> {
@@ -53,6 +56,24 @@ export default async function RunArtifactPage({ params }: { params: Promise<{ ru
   const atomics = graph?.nodes.filter((node) => node.kind === "atomic_claim") ?? [];
   const evidenceNodes = graph?.nodes.filter((node) => node.kind === "evidence") ?? [];
   const sourceNodes = graph?.nodes.filter((node) => node.kind === "source") ?? [];
+  const graphNodesById = new Map((graph?.nodes ?? []).map((node) => [node.node_id, node]));
+  const evidenceByAtomicId = new Map<string, GraphNode[]>();
+  const sourceNodesById = new Map(sourceNodes.map((node) => [node.node_id, node]));
+  const citedSourceByEvidenceId = new Map<string, GraphNode>();
+  for (const edge of graph?.edges ?? []) {
+    if (edge.relation === "has_evidence") {
+      const evidence = graphNodesById.get(edge.target);
+      if (evidence) {
+        const linkedEvidence = evidenceByAtomicId.get(edge.source) ?? [];
+        linkedEvidence.push(evidence);
+        evidenceByAtomicId.set(edge.source, linkedEvidence);
+      }
+    }
+    if (edge.relation === "cited_from") {
+      const source = sourceNodesById.get(edge.target);
+      if (source) citedSourceByEvidenceId.set(edge.source, source);
+    }
+  }
 
   return <main className="shell"><div className="container">
     <header className="hero artifact-hero">
@@ -73,9 +94,15 @@ export default async function RunArtifactPage({ params }: { params: Promise<{ ru
       <section className="card graph-card" aria-labelledby="artifact-graph-title">
         <div className="section-heading"><div><span className="eyebrow">Persisted projection</span><h2 id="artifact-graph-title">Evidence graph</h2></div><span className="graph-count">{atomics.length} claims / {evidenceNodes.length} evidence / {sourceNodes.length} sources</span></div>
         <div className="grid artifact-graph-grid">
-          <div><h3>Atomic claims</h3>{atomics.map((node) => <article className="graph-node atomic-node" key={node.node_id}><strong>{node.label}</strong></article>)}</div>
-          <div><h3>Evidence</h3>{evidenceNodes.map((node) => <article className="graph-node evidence-node" key={node.node_id}><strong>{node.label}</strong><span>{node.stance ?? "UNASSESSED"} / {node.provenance ?? "stored provenance"}</span></article>)}</div>
-          <div><h3>Sources</h3>{sourceNodes.map((node) => <article className="graph-node source-node" key={node.node_id}><strong>{node.label}</strong><span>{node.provenance ?? "stored provenance"}</span></article>)}</div>
+          <div><h3>Atomic claims</h3>{atomics.map((node) => {
+            const linkedEvidence = evidenceByAtomicId.get(node.node_id) ?? [];
+            return <article id={node.node_id} className="graph-node atomic-node" key={node.node_id}><strong>{node.label}</strong>{linkedEvidence.length ? <ul className="graph-link-list">{linkedEvidence.map((item) => <li key={item.node_id}><a href={`#${item.node_id}`}>{item.label}</a></li>)}</ul> : <span>No linked evidence</span>}</article>;
+          })}</div>
+          <div><h3>Evidence</h3>{evidenceNodes.map((node) => {
+            const source = citedSourceByEvidenceId.get(node.node_id);
+            return <article id={node.node_id} className="graph-node evidence-node" key={node.node_id}><strong>{node.label}</strong><p>{node.excerpt ?? "No excerpt was stored for this evidence node."}</p><span>{node.stance ?? "UNASSESSED"} / {node.evidence_level ?? "level not recorded"} / {node.provenance ?? "provenance not recorded"}</span><p className="source-citation">Cited source: {source ? <a href={`#${source.node_id}`}>{source.label}</a> : "No source link recorded"}</p></article>;
+          })}</div>
+          <div><h3>Sources</h3>{sourceNodes.map((node) => <article id={node.node_id} className="graph-node source-node" key={node.node_id}><strong>{node.label}</strong><span>{node.evidence_level ?? "level not recorded"}</span><span>{node.provenance ?? "provenance not recorded"}</span>{node.url?.startsWith("http") ? <a href={node.url} target="_blank" rel="noreferrer">Open source</a> : null}</article>)}</div>
         </div>
       </section>
       <div className="grid evidence-grid">
