@@ -80,7 +80,7 @@ export default async function RunArtifactPage({ params }: { params: Promise<{ ru
       <div className="eyebrow">Persisted / sanitized / read only</div>
       <h1>Run artifact.<br /><span>{run.verdict}</span></h1>
       <p className="lede">This page loads stored run evidence. Opening it does not rerun retrieval or inference. Owner-only deployments require authentication to open this link.</p>
-      <div className="hero-tags"><span>{run.status}</span><span>{run.run_id}</span><span>{Math.round(run.confidence * 100)}% run confidence</span></div>
+      <div className="hero-tags"><span>{run.status}</span><span>{run.run_id}</span><span>Heuristic score: {Math.round(run.confidence * 100)}% · Fixed by verdict rules; not calibrated and not a probability of truth</span></div>
     </header>
     <section className="panel result-panel">
       <div className="section-heading"><div><span className="eyebrow">Claim</span><h2>{run.original_claim}</h2></div><Link href="/">Start another run</Link></div>

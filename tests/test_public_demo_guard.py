@@ -25,7 +25,11 @@ def test_capabilities_expose_mode_but_no_internal_secrets(monkeypatch, tmp_path)
     with TestClient(api_module.app) as client:
         response = client.get("/api/v1/capabilities")
         assert response.status_code == 200
-        assert response.json() == {"demo_only": True, "demo_claim": FIXTURE}
+        assert response.json() == {
+            "demo_only": True,
+            "demo_claim": FIXTURE,
+            "demo_claims": list(api_module.DEMO_FIXTURE_CLAIMS),
+        }
         assert "api_key" not in response.text
         assert client.get("/health").status_code == 200
 
@@ -47,7 +51,7 @@ def test_public_demo_rejects_arbitrary_claim_before_workflow_or_persistence(monk
             assert response.status_code == 403
             assert response.json()["detail"] == {
                 "code": "DEMO_ONLY",
-                "message": "This public demo accepts only the built-in deterministic example.",
+                "message": "This public demo accepts only the built-in deterministic examples.",
             }
     with Session(db.engine) as session:
         assert session.scalar(select(func.count()).select_from(VerificationRunRow)) == 0
@@ -96,3 +100,29 @@ def test_demo_does_not_expose_historical_non_fixture_runs(monkeypatch, tmp_path,
         monkeypatch.setattr(api_module, "settings", Settings(public_demo_only=False))
         assert client.get(f"/api/v1/runs/{run_id}").status_code == 200
         assert client.get("/api/v1/capabilities").json()["demo_only"] is False
+
+
+def test_each_public_fixture_has_expected_verdict_and_unique_evidence(monkeypatch, tmp_path):
+    _configure_demo(monkeypatch, tmp_path)
+    with TestClient(api_module.app) as client:
+        for claim, verdict in zip(
+            api_module.DEMO_FIXTURE_CLAIMS,
+            ("REFUTED", "SUPPORTED", "INSUFFICIENT_EVIDENCE"),
+            strict=True,
+        ):
+            run = client.post("/api/v1/claims/verify", json={"claim": claim}).json()
+            assert run["verdict"] == verdict
+            graph = client.get(f"/api/v1/runs/{run['run_id']}/evidence-graph").json()
+            evidence = [node for node in graph["nodes"] if node["kind"] == "evidence"]
+            sources = [node for node in graph["nodes"] if node["kind"] == "source"]
+            assert len({(node["source_id"], node["excerpt"]) for node in evidence}) == len(evidence)
+            assert len({node["source_id"] for node in sources}) == len(sources)
+            for node in evidence:
+                assert (
+                    node["label"]
+                    == {
+                        "SUPPORTS": "Supporting evidence",
+                        "CONTRADICTS": "Contradicting evidence",
+                        "NEUTRAL": "Neutral evidence",
+                    }[node["stance"]]
+                )

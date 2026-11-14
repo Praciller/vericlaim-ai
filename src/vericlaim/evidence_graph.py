@@ -48,7 +48,11 @@ def build_evidence_graph(result: VerificationResult) -> EvidenceGraphResponse:
             EvidenceGraphNode(
                 node_id=evidence_node_id,
                 kind="evidence",
-                label=f"{evidence.direction.title()} evidence",
+                label={
+                    "SUPPORTS": "Supporting evidence",
+                    "CONTRADICTS": "Contradicting evidence",
+                    "NEUTRAL": "Neutral evidence",
+                }.get(assessment.stance.value if assessment else "", "Unassessed evidence"),
                 excerpt=evidence.excerpt,
                 source_id=evidence.source_id,
                 direction=evidence.direction,

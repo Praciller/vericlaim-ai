@@ -11,7 +11,8 @@ class FixtureSource:
     name = "fixture"
 
     def search(self, query: str, limit: int = 3) -> list[RetrievedRecord]:
-        digest = hashlib.sha256(query.encode("utf-8")).hexdigest()[:12]
+        subject = query.removeprefix("limitations counterexamples ")
+        digest = hashlib.sha256(subject.encode("utf-8")).hexdigest()[:12]
         lowered = query.casefold()
         if any(term in lowered for term in ("unknown", "unverifiable", "no evidence")):
             return []
@@ -44,7 +45,7 @@ class FixtureSource:
                     evidence_level="ABSTRACT_AVAILABLE",
                 )
             ]
-        return [
+        records = [
             RetrievedRecord(
                 source_id=f"fixture:support:{digest}",
                 title="Technical evaluation reports measurable improvement under stated conditions",
@@ -76,3 +77,9 @@ class FixtureSource:
                 evidence_level="ABSTRACT_AVAILABLE",
             ),
         ]
+        if (
+            subject.rstrip(".")
+            == "The intervention improves measured outcomes in the evaluated setting"
+        ):
+            return records[:1]
+        return records
