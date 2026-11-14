@@ -95,9 +95,16 @@ def run_smoke(api: str, web: str) -> None:
     wait_ready(web, "/")
     status, caps = request(api, "/api/v1/capabilities")
     assert status == 200 and isinstance(caps, dict), "Capabilities endpoint unavailable"
-    assert caps == {"demo_only": True, "demo_claim": FIXTURE}, (
-        "Anonymous demo must explicitly enforce the fixture-only policy"
-    )
+    assert (
+        caps.get("demo_only") is True
+        and caps.get("demo_claim") == FIXTURE
+        and caps.get("demo_claims")
+        == [
+            FIXTURE,
+            "The intervention improves measured outcomes in the evaluated setting.",
+            "The unknown intervention improves measured outcomes.",
+        ]
+    ), "Anonymous demo must explicitly enforce the fixture-only policy"
 
     status, denied = request(
         api,

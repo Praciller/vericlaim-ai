@@ -38,6 +38,11 @@ database = Database(
 router = ProviderRouter(settings)
 workflow = VerificationWorkflow(settings, router=router)
 DEMO_FIXTURE_CLAIM = "RAG eliminates hallucinations."
+DEMO_FIXTURE_CLAIMS = (
+    DEMO_FIXTURE_CLAIM,
+    "The intervention improves measured outcomes in the evaluated setting.",
+    "The unknown intervention improves measured outcomes.",
+)
 verify_rate_limiter = (
     DatabaseRateLimiter(
         database.engine,
@@ -115,9 +120,13 @@ def readiness() -> ReadinessResponse:
 
 
 @app.get("/api/v1/capabilities")
-def public_capabilities() -> dict[str, bool | str]:
+def public_capabilities() -> dict[str, bool | str | tuple[str, ...]]:
     """Expose public mode; never expose provider secrets or internal settings."""
-    return {"demo_only": settings.public_demo_only, "demo_claim": DEMO_FIXTURE_CLAIM}
+    return {
+        "demo_only": settings.public_demo_only,
+        "demo_claim": DEMO_FIXTURE_CLAIM,
+        "demo_claims": DEMO_FIXTURE_CLAIMS,
+    }
 
 
 def require_private_access(request: Request) -> None:
@@ -152,12 +161,12 @@ async def verify_claim(
 ) -> VerificationResult | PublicRunResponse:
     # Apply the public-demo data collection policy before inference, retrieval,
     # and persistence. This is not a substitute for multi-user authorization.
-    if settings.public_demo_only and request.claim != DEMO_FIXTURE_CLAIM:
+    if settings.public_demo_only and request.claim not in DEMO_FIXTURE_CLAIMS:
         raise HTTPException(
             status_code=403,
             detail={
                 "code": "DEMO_ONLY",
-                "message": "This public demo accepts only the built-in deterministic example.",
+                "message": "This public demo accepts only the built-in deterministic examples.",
             },
         )
     # Trust the direct connection peer, not client-supplied forwarding headers.
@@ -227,7 +236,7 @@ async def verify_claim(
 def _public_run_or_404(run_id: str) -> VerificationResult:
     result = database.get(run_id)
     if result is None or (
-        settings.public_demo_only and result.original_claim != DEMO_FIXTURE_CLAIM
+        settings.public_demo_only and result.original_claim not in DEMO_FIXTURE_CLAIMS
     ):
         # Do not disclose the existence of historical non-demo runs while
         # operating in publicly accessible demo-only mode.

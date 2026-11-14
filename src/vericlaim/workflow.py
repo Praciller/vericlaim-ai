@@ -376,6 +376,7 @@ class VerificationWorkflow:
             return state
         source_by_id: dict[str, Source] = {}
         metadata_only_seen = False
+        seen_evidence: set[tuple[str, str, str]] = set()
         candidates_seen = 0
         candidate_limit_hit = False
         for query in state.queries:
@@ -424,12 +425,17 @@ class VerificationWorkflow:
                     if not record.abstract or evidence_level == EvidenceLevel.METADATA_ONLY:
                         metadata_only_seen = True
                         continue
+                    excerpt = self._evidence_excerpt(record.abstract)
+                    evidence_key = (query.atomic_id, record.source_id, excerpt)
+                    if evidence_key in seen_evidence:
+                        continue
+                    seen_evidence.add(evidence_key)
                     state.evidence.append(
                         Evidence(
                             evidence_id=f"E-{uuid4().hex[:10]}",
                             atomic_id=query.atomic_id,
                             source_id=record.source_id,
-                            excerpt=self._evidence_excerpt(record.abstract),
+                            excerpt=excerpt,
                             direction=query.direction,
                             evidence_level=evidence_level,
                             provenance=record.provenance,
@@ -570,7 +576,7 @@ class VerificationWorkflow:
                     "not supported",
                     "remain",
                 )
-                if evidence.direction == "counter" or any(
+                if ":counter:" in source.source_id or any(
                     word in lowered for word in contradicting_markers
                 ):
                     stance = EvidenceStance.CONTRADICTS
