@@ -1,7 +1,8 @@
 import pytest
 
 from vericlaim.config import Settings
-from vericlaim.domain.models import VerificationRequest
+from vericlaim.domain.models import EvidenceStance, VerdictLabel, VerificationRequest
+from vericlaim.evidence_graph import build_evidence_graph
 from vericlaim.providers.router import ProviderRouter
 from vericlaim.retrieval.adapters import CrossrefSource, OpenAlexSource
 from vericlaim.retrieval.base import RetrievedRecord
@@ -167,8 +168,128 @@ def test_invalid_evidence_citation_is_detected(workflow):
         update={"supporting_evidence_ids": ["missing-evidence"]}
     )
     invalid = result.model_copy(update={"verdict_details": invalid_details})
-    with pytest.raises(DeterministicValidationError):
+    with pytest.raises(DeterministicValidationError, match="verdict cites nonexistent evidence"):
         validate_result(invalid)
+
+
+@pytest.fixture
+def refuted_result(workflow):
+    return workflow.verify({"claim": "RAG eliminates hallucinations."})
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        ("atomic_claims", "duplicate atomic claim ID"),
+        ("sources", "duplicate source ID"),
+        ("evidence", "duplicate evidence ID"),
+        ("assessments", "duplicate assessment for evidence ID"),
+    ],
+)
+def test_duplicate_graph_identity_is_detected(refuted_result, field, message):
+    entries = getattr(refuted_result, field)
+    invalid = refuted_result.model_copy(update={field: [*entries, entries[0]]})
+
+    with pytest.raises(DeterministicValidationError, match=message):
+        validate_result(invalid)
+
+
+def test_assessment_must_reference_run_evidence(refuted_result):
+    unknown = refuted_result.assessments[0].model_copy(update={"evidence_id": "unknown"})
+    invalid = refuted_result.model_copy(update={"assessments": [unknown]})
+
+    with pytest.raises(
+        DeterministicValidationError, match="assessment references missing evidence"
+    ):
+        validate_result(invalid)
+
+
+@pytest.mark.parametrize("stance", [None, EvidenceStance.SUPPORTS, EvidenceStance.NEUTRAL])
+def test_verdict_citations_require_matching_assessed_stance(refuted_result, stance):
+    assessments = (
+        []
+        if stance is None
+        else [refuted_result.assessments[0].model_copy(update={"stance": stance})]
+    )
+    invalid = refuted_result.model_copy(update={"assessments": assessments})
+
+    with pytest.raises(DeterministicValidationError, match="contradicting citations require"):
+        validate_result(invalid)
+
+
+@pytest.mark.parametrize("field", ["supporting_evidence_ids", "contradicting_evidence_ids"])
+def test_duplicate_verdict_citation_is_detected(refuted_result, field):
+    details = refuted_result.verdict_details
+    invalid = refuted_result.model_copy(
+        update={
+            "verdict_details": details.model_copy(
+                update={field: getattr(details, field) + details.contradicting_evidence_ids}
+            )
+        }
+    )
+
+    with pytest.raises(DeterministicValidationError, match="duplicate verdict citation"):
+        validate_result(invalid)
+
+
+@pytest.mark.parametrize("change", ["omit", "duplicate", "change_provenance"])
+def test_verdict_evidence_list_matches_cited_records(refuted_result, change):
+    evidence = refuted_result.contradicting_evidence[0]
+    altered = {
+        "omit": [],
+        "duplicate": [evidence, evidence],
+        "change_provenance": [evidence.model_copy(update={"provenance": "different provenance"})],
+    }
+    invalid = refuted_result.model_copy(update={"contradicting_evidence": altered[change]})
+
+    with pytest.raises(DeterministicValidationError, match="contradicting evidence list"):
+        validate_result(invalid)
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"confidence": 0.1}, "verdict confidence"),
+        ({"verdict": VerdictLabel.SUPPORTED}, "verdict label"),
+        ({"summary": ""}, "verdict explanation"),
+    ],
+)
+def test_public_verdict_matches_explained_score(refuted_result, changes, message):
+    invalid = refuted_result.model_copy(update=changes)
+
+    with pytest.raises(DeterministicValidationError, match=message):
+        validate_result(invalid)
+
+
+def test_score_requires_explanation_even_when_both_fields_match(refuted_result):
+    invalid = refuted_result.model_copy(
+        update={
+            "summary": " ",
+            "verdict_details": refuted_result.verdict_details.model_copy(
+                update={"explanation": " "}
+            ),
+        }
+    )
+
+    with pytest.raises(DeterministicValidationError, match="verdict explanation"):
+        validate_result(invalid)
+
+
+def test_same_source_and_excerpt_remain_distinct_across_atomic_claims(workflow):
+    atomic_text = "The intervention improves measured outcomes in the evaluated setting"
+    result = workflow.verify({"claim": " and ".join([atomic_text] * 4)})
+    graph = build_evidence_graph(result)
+
+    assert len(result.sources) == 1
+    assert len(result.evidence) == len({item.evidence_id for item in result.evidence}) == 4
+    assert {item.atomic_id for item in result.evidence} == {
+        item.atomic_id for item in result.atomic_claims
+    }
+    assert len({(item.source_id, item.excerpt) for item in result.evidence}) == 1
+    assert sum(node.kind == "source" for node in graph.nodes) == 1
+    assert sum(edge.relation == "cited_from" for edge in graph.edges) == 4
+    assert len(result.supporting_evidence) == 3
+    assert validate_result(result) == result
 
 
 def test_insufficient_evidence_behavior(workflow):
