@@ -8,13 +8,16 @@ import vericlaim.api as api_module
 from vericlaim.config import Settings
 from vericlaim.db import Database, VerificationRunRow
 from vericlaim.rate_limit import InMemoryRateLimiter
+from vericlaim.workflow import VerificationWorkflow
 
 FIXTURE = "RAG eliminates hallucinations."
 
 
 def _configure_demo(monkeypatch, tmp_path):
     db = Database(f"sqlite:///{(tmp_path / 'demo.sqlite3').as_posix()}")
-    monkeypatch.setattr(api_module, "settings", Settings(public_demo_only=True))
+    settings = Settings(public_demo_only=True, live_retrieval_enabled=False)
+    monkeypatch.setattr(api_module, "settings", settings)
+    monkeypatch.setattr(api_module, "workflow", VerificationWorkflow(settings))
     monkeypatch.setattr(api_module, "database", db)
     monkeypatch.setattr(api_module, "verify_rate_limiter", InMemoryRateLimiter(max_requests=200))
     return db
@@ -105,24 +108,67 @@ def test_demo_does_not_expose_historical_non_fixture_runs(monkeypatch, tmp_path,
 def test_each_public_fixture_has_expected_verdict_and_unique_evidence(monkeypatch, tmp_path):
     _configure_demo(monkeypatch, tmp_path)
     with TestClient(api_module.app) as client:
-        for claim, verdict in zip(
+        for claim, (verdict, stance, score) in zip(
             api_module.DEMO_FIXTURE_CLAIMS,
-            ("REFUTED", "SUPPORTED", "INSUFFICIENT_EVIDENCE"),
+            (
+                ("REFUTED", "CONTRADICTS", 0.82),
+                ("SUPPORTED", "SUPPORTS", 0.7),
+                ("INSUFFICIENT_EVIDENCE", None, 0.2),
+            ),
             strict=True,
         ):
-            run = client.post("/api/v1/claims/verify", json={"claim": claim}).json()
+            created = client.post("/api/v1/claims/verify", json={"claim": claim})
+            assert created.status_code == 200
+            run = created.json()
             assert run["verdict"] == verdict
-            graph = client.get(f"/api/v1/runs/{run['run_id']}/evidence-graph").json()
+            assert run["confidence"] == score
+            assert run["summary"].strip()
+            path = f"/api/v1/runs/{run['run_id']}"
+            assert client.get(path).json() == run
+            stored = client.get(f"{path}/evidence").json()["evidence"]
+            graph = client.get(f"{path}/evidence-graph").json()
             evidence = [node for node in graph["nodes"] if node["kind"] == "evidence"]
             sources = [node for node in graph["nodes"] if node["kind"] == "source"]
-            assert len({(node["source_id"], node["excerpt"]) for node in evidence}) == len(evidence)
-            assert len({node["source_id"] for node in sources}) == len(sources)
-            for node in evidence:
-                assert (
-                    node["label"]
-                    == {
-                        "SUPPORTS": "Supporting evidence",
-                        "CONTRADICTS": "Contradicting evidence",
-                        "NEUTRAL": "Neutral evidence",
-                    }[node["stance"]]
-                )
+            assert len(evidence) == len(sources) == len(stored) == int(stance is not None)
+            if stance is None:
+                assert run["supporting_evidence"] == run["contradicting_evidence"] == []
+                continue
+
+            item, node, source = stored[0], evidence[0], sources[0]
+            assert run["supporting_evidence"] == (stored if stance == "SUPPORTS" else [])
+            assert run["contradicting_evidence"] == (stored if stance == "CONTRADICTS" else [])
+            assert node["stance"] == stance
+            assert (
+                node["label"]
+                == {
+                    "SUPPORTS": "Supporting evidence",
+                    "CONTRADICTS": "Contradicting evidence",
+                }[stance]
+            )
+            assert node["node_id"] == f"evidence:{item['evidence_id']}"
+            for field in ("source_id", "excerpt", "direction", "evidence_level", "provenance"):
+                assert node[field] == item[field]
+            assert node["source_id"] == source["source_id"] == run["sources"][0]["source_id"]
+            assert {
+                (edge["relation"], edge["source"], edge["target"]) for edge in graph["edges"]
+            } >= {
+                ("has_evidence", f"atomic_claim:{item['atomic_id']}", node["node_id"]),
+                ("cited_from", node["node_id"], source["node_id"]),
+            }
+
+
+def test_invalid_fixture_projection_is_rejected_before_persistence(monkeypatch, tmp_path):
+    db = _configure_demo(monkeypatch, tmp_path)
+    to_result = api_module.workflow._to_result
+
+    def drop_public_counter_evidence(state):
+        return to_result(state).model_copy(update={"contradicting_evidence": []})
+
+    monkeypatch.setattr(api_module.workflow, "_to_result", drop_public_counter_evidence)
+    with TestClient(api_module.app) as client:
+        response = client.post("/api/v1/claims/verify", json={"claim": FIXTURE})
+        assert response.status_code == 422
+        assert response.json() == {"detail": "verification request is invalid"}
+
+    with Session(db.engine) as session:
+        assert session.scalar(select(func.count()).select_from(VerificationRunRow)) == 0
