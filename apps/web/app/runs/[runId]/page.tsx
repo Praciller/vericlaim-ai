@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { backendAccessHeaders, backendEndpoint } from "../../lib/backend";
 import { ownerAuthorized, privateModeEnabled } from "../../lib/owner-auth";
 import { sanitizeRunArtifact } from "../../lib/run-artifact";
+import { HashAnchorScroll } from "../../components/hash-anchor-scroll";
 
 type AtomicClaim = { atomic_id: string; text: string };
 type Evidence = {
@@ -75,7 +76,7 @@ export default async function RunArtifactPage({ params }: { params: Promise<{ ru
     }
   }
 
-  return <main className="shell"><div className="container">
+  return <main className="shell"><HashAnchorScroll /><div className="container">
     <header className="hero artifact-hero">
       <div className="eyebrow">Persisted / sanitized / read only</div>
       <h1>Run artifact.<br /><span>{run.verdict}</span></h1>
@@ -96,13 +97,13 @@ export default async function RunArtifactPage({ params }: { params: Promise<{ ru
         <div className="grid artifact-graph-grid">
           <div><h3>Atomic claims</h3>{atomics.map((node) => {
             const linkedEvidence = evidenceByAtomicId.get(node.node_id) ?? [];
-            return <article id={node.node_id} className="graph-node atomic-node" key={node.node_id}><strong>{node.label}</strong>{linkedEvidence.length ? <ul className="graph-link-list">{linkedEvidence.map((item) => <li key={item.node_id}><a href={`#${item.node_id}`}>{item.label}</a></li>)}</ul> : <span>No linked evidence</span>}</article>;
+            return <article id={node.node_id} tabIndex={-1} className="graph-node atomic-node" key={node.node_id}><strong>{node.label}</strong>{linkedEvidence.length ? <ul className="graph-link-list">{linkedEvidence.map((item) => <li key={item.node_id}><a href={`#${item.node_id}`}>{item.label}</a></li>)}</ul> : <span>No linked evidence</span>}</article>;
           })}</div>
           <div><h3>Evidence</h3>{evidenceNodes.map((node) => {
             const source = citedSourceByEvidenceId.get(node.node_id);
-            return <article id={node.node_id} className="graph-node evidence-node" key={node.node_id}><strong>{node.label}</strong><p>{node.excerpt ?? "No excerpt was stored for this evidence node."}</p><span>{node.stance ?? "UNASSESSED"} / {node.evidence_level ?? "level not recorded"} / {node.provenance ?? "provenance not recorded"}</span><p className="source-citation">Cited source: {source ? <a href={`#${source.node_id}`}>{source.label}</a> : "No source link recorded"}</p></article>;
+            return <article id={node.node_id} tabIndex={-1} className="graph-node evidence-node" key={node.node_id}><strong>{node.label}</strong><p>{node.excerpt ?? "No excerpt was stored for this evidence node."}</p><span>{node.stance ?? "UNASSESSED"} / {node.evidence_level ?? "level not recorded"} / {node.provenance ?? "provenance not recorded"}</span><p className="source-citation">Cited source: {source ? <a href={`#${source.node_id}`}>{source.label}</a> : "No source link recorded"}</p></article>;
           })}</div>
-          <div><h3>Sources</h3>{sourceNodes.map((node) => <article id={node.node_id} className="graph-node source-node" key={node.node_id}><strong>{node.label}</strong><span>{node.evidence_level ?? "level not recorded"}</span><span>{node.provenance ?? "provenance not recorded"}</span>{node.url?.startsWith("http") ? <a href={node.url} target="_blank" rel="noreferrer">Open source</a> : null}</article>)}</div>
+          <div><h3>Sources</h3>{sourceNodes.map((node) => <article id={node.node_id} tabIndex={-1} className="graph-node source-node" key={node.node_id}><strong>{node.label}</strong><span>{node.evidence_level ?? "level not recorded"}</span><span>{node.provenance ?? "provenance not recorded"}</span>{node.url?.startsWith("http") ? <a href={node.url} target="_blank" rel="noreferrer">Open source</a> : null}</article>)}</div>
         </div>
       </section>
       <div className="grid evidence-grid">
