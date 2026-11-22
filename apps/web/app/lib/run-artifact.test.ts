@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { hashTargetId } from "./hash-target.ts";
 import { FIXTURE_DEMO_CLAIM, runArtifactHref, sanitizeRunArtifact, sanitizeVerificationResponse } from "./run-artifact.ts";
 
 const unsafeRun = {
@@ -19,6 +20,13 @@ test("fixture demo uses the deterministic claim", () => {
 
 test("shareable paths encode run ids", () => {
   assert.equal(runArtifactHref("run/a b"), "/runs/run%2Fa%20b");
+});
+
+test("hash targets preserve graph ids and safely decode encoded ids", () => {
+  assert.equal(hashTargetId("#source:fixture:counter:abc123"), "source:fixture:counter:abc123");
+  assert.equal(hashTargetId("#source%3Afixture%3Acounter%3Aabc123"), "source:fixture:counter:abc123");
+  assert.equal(hashTargetId(""), null);
+  assert.equal(hashTargetId("#%E0%A4%A"), null);
 });
 
 test("public artifacts drop provider and internal trace fields", () => {
