@@ -19,18 +19,27 @@ inference/persistence still requires a separate gated live smoke.
 
 ## Portfolio demo (deterministic fixture only)
 
-**Production verified (2026-10-24):** The hosted portfolio demo remains
-anonymous and deterministic. Production deployments are **Web `f1c8af1`**
-(owner gateway code present but Private Mode disabled) and **API `ea96611`**
+**Production rechecked (2026-11-22):** The hosted portfolio demo remains
+anonymous and deterministic. Vercel reports Web Production `READY` at
+`87feeb016d2f0262e5d802dbd3b047c0a3045f8f` and API Production `READY` at
+`c42413a48121218e6ca0f5c85267c131a267df19`. GitHub `main` is at the Web
+commit; only the Web was deployed, and the API was left unchanged. The
+read-only hosted preflight passed API health, database readiness, demo mode,
+provider status, mock-only behavior, Web home, and Web proxy checks. The
+public run-artifact deep link returned HTTP 200. These checks did not submit a
+claim, invoke a provider, or test persisted writes. PR #42's stricter evidence
+validation is still unmerged and is not live.
+
+**Historical production smoke (2026-10-24):** At that time Web `f1c8af1`
+(owner gateway code present but Private Mode disabled) and API `ea96611`
 (Gemini configured but disabled, Mock enabled, `gemini-3.5-flash-lite`
-selected for future owner-only use). Both Vercel projects are `READY`.
-Post-deploy HTTP smoke through the same-origin Web proxy confirmed
-200 responses for the home/capabilities/provider-status routes, HTTP 403 for
-arbitrary claim submissions, a successful allowed deterministic fixture,
-and persisted Run/Evidence/Evidence-Graph readback. API Health/Ready are 200.
-The previous desktop/mobile E2E was completed against the earlier Web demo
-release; the latest Web upgrade has passed the stated HTTP smoke, not a new
-full desktop/mobile browser matrix.
+selected for future owner-only use) passed a broader smoke through the
+same-origin Web proxy: home/capabilities/provider-status returned 200,
+arbitrary claim submissions returned 403, a deterministic fixture succeeded,
+and Run/Evidence/Evidence-Graph readback persisted. API Health/Ready returned
+200. The previous desktop/mobile E2E was completed against the earlier Web
+demo release; that historical smoke did not verify the current desktop/mobile
+browser matrix.
 
 The API has `RUN_RETENTION_PURGE_ENABLED=false` as an **explicit, temporary
 Production data-preservation exemption**: expired run links still return
