@@ -22,13 +22,12 @@ inference/persistence still requires a separate gated live smoke.
 **Production rechecked (2026-11-22):** The hosted portfolio demo remains
 anonymous and deterministic. Vercel reports Web Production `READY` at
 `87feeb016d2f0262e5d802dbd3b047c0a3045f8f` and API Production `READY` at
-`c42413a48121218e6ca0f5c85267c131a267df19`. GitHub `main` is at the Web
-commit; only the Web was deployed, and the API was left unchanged. The
-read-only hosted preflight passed API health, database readiness, demo mode,
-provider status, mock-only behavior, Web home, and Web proxy checks. The
-public run-artifact deep link returned HTTP 200. These checks did not submit a
-claim, invoke a provider, or test persisted writes. PR #42's stricter evidence
-validation is still unmerged and is not live.
+`7198ab92ca875ee953d9f09e0ae2f703a0738bcb`. GitHub `main` includes the API
+evidence-consistency validation from PR #42. The read-only hosted preflight
+passed API health, database readiness, demo mode, provider status, mock-only
+behavior, Web home, and Web proxy checks. The public run-artifact deep link
+returned HTTP 200. These checks did not submit a claim, invoke a provider, or
+test persisted writes.
 
 **Historical production smoke (2026-10-24):** At that time Web `f1c8af1`
 (owner gateway code present but Private Mode disabled) and API `ea96611`
